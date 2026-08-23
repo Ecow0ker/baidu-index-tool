@@ -33,7 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw "pip 升级失败" }
 if ($LASTEXITCODE -ne 0) { throw "Windows 构建依赖安装失败" }
 
 & $Python -m PyInstaller --noconfirm --clean --onefile --windowed `
-  --name "百度指数查询工具-v2.4.0-Windows-x64" `
+  --name "baidu-index-tool-v2.4.0-windows-x64" `
   --paths (Join-Path $Root "src") `
   --hidden-import webview.platforms.edgechromium `
   --icon (Join-Path $Root "assets\econ-index-icon.ico") `
@@ -42,7 +42,7 @@ if ($LASTEXITCODE -ne 0) { throw "Windows 构建依赖安装失败" }
   (Join-Path $Root "run_webview_gui.py")
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller 构建失败" }
 
-$Exe = Join-Path $Root "dist\百度指数查询工具-v2.4.0-Windows-x64.exe"
+$Exe = Join-Path $Root "dist\baidu-index-tool-v2.4.0-windows-x64.exe"
 if (-not (Test-Path $Exe)) { throw "EXE output missing: $Exe" }
 
 if (-not $SkipSmokeTest) {

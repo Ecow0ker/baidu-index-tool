@@ -7,11 +7,11 @@ VERSION=2.4.0
 
 MAC_X64_APP="$ROOT/dist/macos-x64/百度指数查询工具.app"
 MAC_ARM64_APP="$ROOT/dist/macos-arm64/百度指数查询工具.app"
-WIN_EXE="$ROOT/dist/百度指数查询工具-v${VERSION}-Windows-x64.exe"
-MAC_X64_ZIP="$RELEASE/百度指数查询工具-v${VERSION}-macOS-x64.zip"
-MAC_ARM64_ZIP="$RELEASE/百度指数查询工具-v${VERSION}-macOS-arm64.zip"
+WIN_EXE="$ROOT/dist/baidu-index-tool-v${VERSION}-windows-x64.exe"
+MAC_X64_ZIP="$RELEASE/baidu-index-tool-v${VERSION}-macos-x64.zip"
+MAC_ARM64_ZIP="$RELEASE/baidu-index-tool-v${VERSION}-macos-arm64.zip"
 WIN_RELEASE="$RELEASE/$(basename "$WIN_EXE")"
-GITHUB_ZIP="$RELEASE/百度指数查询工具-v${VERSION}-GitHub源码.zip"
+GITHUB_ZIP="$RELEASE/baidu-index-tool-v${VERSION}-source.zip"
 
 mkdir -p "$RELEASE"
 for path in "$MAC_X64_APP" "$MAC_ARM64_APP" "$WIN_EXE"; do
@@ -73,9 +73,9 @@ PY
 cat > "$RELEASE/README.md" <<EOF_README
 # 百度指数查询工具 v${VERSION}
 
-- macOS Intel：下载 \`百度指数查询工具-v${VERSION}-macOS-x64.zip\`。
-- macOS M 系列：下载 \`百度指数查询工具-v${VERSION}-macOS-arm64.zip\`。
-- Windows 64 位：下载 \`百度指数查询工具-v${VERSION}-Windows-x64.exe\`。
+- macOS Intel：下载 \`baidu-index-tool-v${VERSION}-macos-x64.zip\`。
+- macOS M 系列：下载 \`baidu-index-tool-v${VERSION}-macos-arm64.zip\`。
+- Windows 64 位：下载 \`baidu-index-tool-v${VERSION}-windows-x64.exe\`。
 
 macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也可执行：
 

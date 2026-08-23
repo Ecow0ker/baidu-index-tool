@@ -9,7 +9,7 @@ LAUNCHER="$ROOT/windows_python_launcher"
 PYTHON=${PYTHON:-python3}
 PYTHON_VERSION=3.12.10
 VERSION=2.4.0
-OUTPUT="$ROOT/dist/百度指数查询工具-v${VERSION}-Windows-x64.exe"
+OUTPUT="$ROOT/dist/baidu-index-tool-v${VERSION}-windows-x64.exe"
 mkdir -p "$CACHE" "$WEB_CACHE" "$BUILD" "$ROOT/dist"
 
 fetch() {

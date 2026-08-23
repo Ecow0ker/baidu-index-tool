@@ -19,11 +19,11 @@
 
 | 系统 | 处理器 | GitHub Release 文件 |
 |---|---|---|
-| macOS | Intel | `百度指数查询工具-v2.4.0-macOS-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `百度指数查询工具-v2.4.0-macOS-arm64.zip` |
-| Windows | 64 位 Intel/AMD | `百度指数查询工具-v2.4.0-Windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.0-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.0-macos-arm64.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.0-windows-x64.exe` |
 
-命名采用 GitHub 软件常见的 `macOS-x64` 与 `macOS-arm64` 架构后缀。macOS 解压后运行 APP；Windows 直接运行 EXE。
+命名采用 GitHub 软件常见的 `macos-x64` 与 `macos-arm64` 架构后缀。macOS 解压后运行 APP；Windows 直接运行 EXE。
 
 macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也可执行：
 
@@ -96,7 +96,7 @@ Windows PowerShell：
 ./build_windows_python_releases.sh
 ```
 
-输出：`dist/百度指数查询工具-v2.4.0-Windows-x64.exe`。
+输出：`dist/baidu-index-tool-v2.4.0-windows-x64.exe`。
 
 ### 完整发行包
 

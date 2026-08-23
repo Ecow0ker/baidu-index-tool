@@ -1,4 +1,4 @@
-b34ef90f38485d93457c7aa65ee20dd59e776bee1256d72bc9800d44d8099f14  百度指数查询工具-v2.4.0-macOS-x64.zip
-3169cba9e370c4a6baec55f4b57985156054aa8edc5edf1ad6b0e4d2cdb22a2a  百度指数查询工具-v2.4.0-macOS-arm64.zip
-f1964b63a15ba4331daa3f70b11dc408f039c44df101c49d2f7ace2fe7ddb4e9  百度指数查询工具-v2.4.0-Windows-x64.exe
-9cde8aa1685f9f00480c3d52ab14d839f74d1c6cb973ee89bcba44bb8f21b413  百度指数查询工具-v2.4.0-GitHub源码.zip
+b34ef90f38485d93457c7aa65ee20dd59e776bee1256d72bc9800d44d8099f14  baidu-index-tool-v2.4.0-macos-x64.zip
+3169cba9e370c4a6baec55f4b57985156054aa8edc5edf1ad6b0e4d2cdb22a2a  baidu-index-tool-v2.4.0-macos-arm64.zip
+f1964b63a15ba4331daa3f70b11dc408f039c44df101c49d2f7ace2fe7ddb4e9  baidu-index-tool-v2.4.0-windows-x64.exe
+5eeca506e88399bb40612ea2a201af548e93db4ed903ab8c5a4f9a00029c87aa  baidu-index-tool-v2.4.0-source.zip
