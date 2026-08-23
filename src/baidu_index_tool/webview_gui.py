@@ -767,7 +767,13 @@ def launch_system_webview(
                     main_window.events.loaded.wait(15)
                     main_window.resize(1120, 700)
                     time.sleep(0.6)
-                    time.sleep(2.0)
+                    ready_deadline = time.monotonic() + 15.0
+                    while time.monotonic() < ready_deadline:
+                        if main_window.evaluate_js("Boolean(window.__appReady)"):
+                            break
+                        time.sleep(0.1)
+                    else:
+                        raise RuntimeError("interface bootstrap timeout")
                     login_window_recreated = False
                     try:
                         first_login = api._ensure_login_window()
@@ -806,7 +812,9 @@ def launch_system_webview(
                       checks.noSettings = !document.querySelector('[data-page="settings"]');
                       checks.noExtraCopy = !document.body.innerText.includes('经济与品牌指数数据工作台') && !document.body.innerText.includes('设计预览') && !document.body.innerText.includes('经' + '数');
                       const sizes = [...document.querySelectorAll('body *')].filter(visible).map(x => parseFloat(getComputedStyle(x).fontSize)).filter(Number.isFinite);
-                      checks.minimumFont = Math.min(...sizes) >= 12;
+                      const rawMinimumFont = Math.min(...sizes);
+                      const effectiveMinimumFont = rawMinimumFont * Math.max(1, Number(devicePixelRatio) || 1);
+                      checks.minimumFont = effectiveMinimumFont >= 12;
                       checks.startVisible = (() => { const r = document.getElementById('startBtn').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })();
                       checks.noHorizontalOverflow = document.documentElement.scrollWidth <= innerWidth && document.body.scrollWidth <= innerWidth;
                       checks.configNoHorizontalOverflow = (() => {
@@ -886,7 +894,7 @@ def launch_system_webview(
                       checks.reset = document.getElementById('keywords').value === '华为' && document.getElementById('interval').value === '4';
                       checks.outputDirectory = Boolean(document.getElementById('outputDir').value);
                       checks.queryControls = document.getElementById('pauseBtn').disabled && document.getElementById('stopBtn').disabled;
-                      return JSON.stringify({allPass: Object.values(checks).every(Boolean), minimumFont: Math.min(...sizes), checks});
+                      return JSON.stringify({allPass: Object.values(checks).every(Boolean), minimumFont: effectiveMinimumFont, rawMinimumFont, devicePixelRatio, checks});
                     })()
                     """)
                     payload = json.loads(value) if isinstance(value, str) else value

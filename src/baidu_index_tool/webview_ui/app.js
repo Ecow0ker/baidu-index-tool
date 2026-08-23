@@ -124,4 +124,5 @@ window.addEventListener('pywebviewready',async()=>{
     ];
     setRows(rows);$('successTotal').textContent='1';$('bar').style.width='60%';$('percent').textContent='60%';$('countdownValue').textContent='4';$('countdownBadge').classList.add('active');updateStatus('正在获取品牌指数 · 3/5','当前步骤：品牌资讯指数 · 华为 · 全国');$('resultMeta').textContent='进行中 · 3/5 个请求';addLog('等待 4 秒','品牌资讯指数 · 华为 · 全国');addLog('品牌搜索指数获取成功','3/5','success');addLog('品牌已匹配','品牌名称：华为','success');updateCounts();
   }
+  window.__appReady=true;
 });

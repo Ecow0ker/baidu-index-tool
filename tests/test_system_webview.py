@@ -398,6 +398,7 @@ class SystemWebViewTests(unittest.TestCase):
         self.assertNotIn("if(page==='community')", script)
         self.assertNotRegex(script, r"setInterval\([^\n]*syncCookies")
         self.assertIn("button.disabled=true", script)
+        self.assertIn("window.__appReady=true", script)
 
         self.assertIn('欢迎关注微信公众号“经实研读”，或加入QQ群：610645081', readme)
         self.assertTrue((root / ".gitignore").is_file())
