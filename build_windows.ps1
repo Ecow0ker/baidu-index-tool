@@ -46,8 +46,16 @@ $Exe = Join-Path $Root "dist\百度指数查询工具-v2.4.0-Windows-x64.exe"
 if (-not (Test-Path $Exe)) { throw "EXE output missing: $Exe" }
 
 if (-not $SkipSmokeTest) {
-  $Process = Start-Process -FilePath $Exe -ArgumentList "--demo", "--auto-close-ms", "3000" -Wait -PassThru
+  $UiResult = Join-Path $env:TEMP "baidu-index-ui-self-test.json"
+  if (Test-Path $UiResult) { Remove-Item -Force $UiResult }
+  $Process = Start-Process -FilePath $Exe `
+    -ArgumentList "--demo", "--ui-self-test-output", $UiResult -Wait -PassThru
   if ($Process.ExitCode -ne 0) { throw "GUI smoke test failed: $Exe, exit $($Process.ExitCode)" }
+  if (-not (Test-Path $UiResult)) { throw "GUI self-test result missing: $UiResult" }
+  $Ui = Get-Content -Raw -Encoding UTF8 $UiResult | ConvertFrom-Json
+  if (-not $Ui.allPass) { throw "GUI self-test failed: $(Get-Content -Raw -Encoding UTF8 $UiResult)" }
+  $CheckCount = ($Ui.checks.PSObject.Properties | Measure-Object).Count
+  Write-Host "Windows GUI self-test: $CheckCount/$CheckCount"
 }
 
 Get-FileHash -Algorithm SHA256 $Exe | Format-List

@@ -9,15 +9,15 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           architecture: "x64"
       - name: Build and smoke-test EXE
         shell: powershell
         run: .\build_windows.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: 百度指数查询工具-v2.4.0-Windows-x64
           path: dist/百度指数查询工具-v2.4.0-Windows-x64.exe
