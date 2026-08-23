@@ -1,4 +1,4 @@
-b34ef90f38485d93457c7aa65ee20dd59e776bee1256d72bc9800d44d8099f14  baidu-index-tool-v2.4.0-macos-x64.zip
-3169cba9e370c4a6baec55f4b57985156054aa8edc5edf1ad6b0e4d2cdb22a2a  baidu-index-tool-v2.4.0-macos-arm64.zip
-f1964b63a15ba4331daa3f70b11dc408f039c44df101c49d2f7ace2fe7ddb4e9  baidu-index-tool-v2.4.0-windows-x64.exe
-5eeca506e88399bb40612ea2a201af548e93db4ed903ab8c5a4f9a00029c87aa  baidu-index-tool-v2.4.0-source.zip
+66a9d7a02432f6b3a2ccaf43d0ebf51f725d48dbad0ac6bd1a3f38c6c49c361d  baidu-index-tool-v2.4.0-macos-x64.zip
+ee9eda35407dc98e5f07008f40f857bf126020da81c48acf6001e14710ff6564  baidu-index-tool-v2.4.0-macos-arm64.zip
+7743e4bad4a9de8a5f1087a69ecfe08198a64971d5cbb86b19c4338fc722994c  baidu-index-tool-v2.4.0-windows-x64.exe
+e5858a9f9f4f4a8bbcfa80c9c9f4b86b5f7b4624844fcb25c6670224e0e68b61  baidu-index-tool-v2.4.0-source.zip
