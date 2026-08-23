@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>百度指数查询工具</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="controls.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brandBlock">
+    <img class="appLogo" src="assets/econ-index-icon.png" alt="应用图标">
+    <div class="heading"><h1>百度指数查询工具</h1></div>
+  </div>
+  <div class="topActions">
+    <span id="accountState" class="account"><i></i>未保存账号</span>
+    <button id="loginBtn" class="primary accountButton"><span class="buttonIcon">♙</span>管理账号</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <nav class="sideNav" aria-label="主导航">
+    <button class="navItem active" data-page="task"><span>⌕</span><b>查询任务</b></button>
+    <button class="navItem" data-page="account"><span>♙</span><b>账号中心</b></button>
+    <button class="navItem" data-page="export"><span>⇩</span><b>导出记录</b></button>
+    <button id="aboutButton" class="navFoot" type="button"><span class="aboutIcon" aria-hidden="true">i</span><b>关于</b></button>
+  </nav>
+
+  <section class="configPanel">
+    <div class="panelTitle"><h2>查询配置</h2><button id="resetConfig" class="iconButton" title="恢复默认配置">↺</button></div>
+    <div class="configScroll">
+
+    <section class="formSection keywordSection">
+      <div class="labelRow"><label for="keywords">关键词</label><b id="keywordCount">1 个</b></div>
+      <textarea id="keywords" class="keywordBox">华为</textarea>
+      <small>每行一个关键词，自动去除重复项</small>
+    </section>
+
+    <section class="formSection">
+      <label>日期范围</label>
+      <div class="dateRange"><input type="date" id="startDate"><span>至</span><input type="date" id="endDate"></div>
+      <div class="inlineField"><label for="period">聚合周期</label><select id="period"><option value="daily">天（日级）</option><option value="weekly">周（均值）</option><option value="monthly">月（均值）</option><option value="yearly">年（均值）</option></select></div>
+    </section>
+
+    <section class="formSection regionSection">
+      <div class="labelRow"><label>地区选择</label><b id="regionCount">1 个</b></div>
+      <div class="regionSummary"><span id="regionSummary">全国 · 1 个地区</span><span>⌄</span></div>
+      <div class="searchField"><span>⌕</span><input id="regionSearch" placeholder="搜索省份、城市或地区 ID"></div>
+      <div id="regions" class="regions"></div>
+      <div class="regionActions"><button id="selectProvinces">选择全部省份</button><button id="selectCities">选择全部城市</button><button id="clearRegions">清空</button></div>
+    </section>
+
+    <section class="formSection indexSection">
+      <label>指数类型</label>
+      <div class="tabs"><button id="searchTab" class="active">搜索指数</button><button id="brandTab">品牌指数</button></div>
+      <div id="searchChannels" class="checks compactChecks">
+        <label><input type="checkbox" value="overall" checked><span>整体数据</span></label>
+        <label><input type="checkbox" value="pc" checked><span>PC 端</span></label>
+        <label><input type="checkbox" value="mobile" checked><span>移动端</span></label>
+        <label><input type="checkbox" value="news"><span>资讯指数</span></label>
+      </div>
+      <div id="brandChannels" class="checks compactChecks hidden">
+        <label><input type="checkbox" value="brand_index" checked><span>品牌指数</span></label>
+        <label><input type="checkbox" value="brand_search" checked><span>品牌搜索</span></label>
+        <label><input type="checkbox" value="brand_news" checked><span>品牌资讯</span></label>
+        <label><input type="checkbox" value="brand_interaction" checked><span>品牌互动</span></label>
+      </div>
+      <div id="brandHelp" class="brandHelp hidden">先匹配品牌，再查询四项指标。</div>
+    </section>
+
+    <section class="formSection taskSettings">
+      <div class="inlineField"><label for="interval">提取间隔</label><div class="numberField"><input id="interval" type="number" min="0" max="3600" value="4"><span>秒</span></div></div>
+      <small>首次请求和每次后续请求前均执行倒计时</small>
+      <label class="outputLabel">导出目录</label>
+      <div class="pathChooser"><span class="folderGlyph">▱</span><input id="outputDir" class="pathInput"><button id="chooseOutput" type="button">选择目录</button></div>
+    </section>
+    </div>
+
+    <button id="startBtn" class="primary startButton"><span>▶</span>开始查询</button>
+  </section>
+
+  <section class="resultWorkspace">
+    <div class="summaryGrid">
+      <article><span class="summaryIcon blue">▣</span><div><small>任务组合</small><b id="taskTotal">1</b></div></article>
+      <article><span class="summaryIcon green">✓</span><div><small>成功</small><b id="successTotal">0</b></div></article>
+      <article><span class="summaryIcon amber">!</span><div><small>失败</small><b id="failureTotal">0</b></div></article>
+      <article><span class="summaryIcon violet">◷</span><div><small>预计耗时</small><b id="estimatedTime">20 秒</b></div></article>
+    </div>
+
+    <section class="statusCard">
+      <div class="statusTop">
+        <div class="statusMessage"><b id="statusTitle">等待开始查询</b><p id="status">配置完成后即可创建查询任务</p></div>
+        <div class="runControls"><div id="countdownBadge" class="countdownBadge"><span id="countdownValue">—</span><small>秒</small></div><button id="pauseBtn" title="暂停倒计时" disabled>Ⅱ 暂停</button><button id="stopBtn" class="dangerGhost" disabled>■ 停止</button></div>
+      </div>
+      <div class="selectedRegionsRow"><b>已选地区</b><span id="selectedRegions">全国</span></div>
+      <div class="progress"><i id="bar"></i><span id="percent">0%</span></div>
+    </section>
+
+    <section class="resultsCard">
+      <div class="resultsHead"><div><h2>查询结果</h2><p id="resultMeta">尚未开始</p></div><div class="resultActions"><button id="openExport" disabled>打开导出目录</button></div></div>
+      <div class="tableWrap"><table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"><tr><td colspan="8" class="empty"><span class="emptyIcon">⌕</span><b>等待查询结果</b><small>登录账号并点击“开始查询”</small></td></tr></tbody></table></div>
+      <footer class="tableFooter"><span id="rowCount">共 0 条</span><span>缺失值以“—”显示，不等同于 0</span></footer>
+    </section>
+  </section>
+
+  <aside class="activityPanel">
+    <div class="activityHead"><h2>运行日志</h2><button id="clearLog" class="iconButton" title="清空日志">⌫</button></div>
+    <div id="activityLog" class="activityLog">
+      <article class="logItem info"><i></i><time>就绪</time><b>等待创建任务</b><p>请求日志将在这里实时显示</p></article>
+    </div>
+    <div class="activityFoot"><span><i></i>实时更新</span><button id="collapseLog">收起</button></div>
+  </aside>
+</main>
+
+<div id="accountModal" class="modal hidden">
+  <div class="dialog">
+    <div class="dialogHead"><div><b>账号中心</b><span>登录与 Cookie</span></div><button id="closeModal">×</button></div>
+    <div class="loginGrid">
+      <section class="loginHelp">
+        <span class="stepBadge">方式一 · 推荐</span><h2>在软件内完成账号登录</h2>
+        <p>打开由本软件创建的登录窗口，不调用本机 Chrome。登录后返回此处同步 Cookie。</p>
+        <button id="openLogin" class="primary large">打开软件内登录窗口</button>
+        <button id="syncCookies">登录完成后同步 Cookie</button>
+        <div id="syncState" class="syncState">等待登录</div>
+      </section>
+      <section class="cookiePanel">
+        <span class="stepBadge">方式二 · 多账号</span><h2>Cookie 与账号轮换</h2>
+        <p>一行一个 Cookie；登录窗口可同步 HttpOnly Cookie。</p>
+        <textarea id="accounts" placeholder="BDUSS=...; BAIDUID=..."></textarea>
+        <label>账号切换 <select id="strategy"><option value="round_robin">依次轮换</option><option value="random">随机切换</option></select></label>
+        <div id="accountCount">状态：0 个账号</div>
+        <button id="saveAccounts" class="primary saveButton">确定并保存</button>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="aboutModal" class="modal hidden">
+  <div class="aboutDialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="dialogHead"><b id="aboutTitle">关于</b><button id="closeAbout" aria-label="关闭">×</button></div>
+    <div class="aboutBody"><b>版本：v2.4.0</b><span>QQ群：610645081</span></div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "status": 0,
+  "message": "success",
+  "data": {
+    "uniqid": "fixture-uniqid",
+    "userIndexes": [
+      {
+        "word": [{"name": "测试", "wordType": 1}],
+        "all": {"startDate": "2025-01-01", "endDate": "2025-01-03", "data": "bakcakda"},
+        "pc": {"startDate": "2025-01-01", "endDate": "2025-01-03", "data": "gkbckbi"},
+        "wise": {"startDate": "2025-01-01", "endDate": "2025-01-03", "data": "ekikbc"}
+      }
+    ]
+  }
+}

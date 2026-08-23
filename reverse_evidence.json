@@ -1,0 +1,27 @@
+{
+  "baseline_sha256": "414315adf6387fbea1f521c999028f7a33f4a10cba0c93a3a95ab2bc9e4a38ca",
+  "format": "PE32 i386 Windows GUI",
+  "compiler": "易语言静态编译",
+  "functions": {
+    "validation": "0x00405dde",
+    "search_request": "0x0042573a",
+    "ptbk_decode": "0x0041934f",
+    "search_export": "0x00439a03",
+    "news_request_legacy": "0x0041a797",
+    "brand": "0x0041d8cf",
+    "live_24h": "0x0041ea6b",
+    "word_graph": "0x004273fa",
+    "audience": "0x0042a9b3"
+  },
+  "virtual_addresses": {
+    "search_template": "0x005df2db",
+    "ptbk_template": "0x005d1221",
+    "search_csv_header": "0x005cddf6",
+    "news_csv_header": "0x005cddc7",
+    "login_url": "0x005e1b5b",
+    "earliest_search_date": "0x005cdbe7",
+    "earliest_news_date": "0x005cdc22"
+  },
+  "region_count": 393,
+  "historical_csv_samples_verified": 55
+}

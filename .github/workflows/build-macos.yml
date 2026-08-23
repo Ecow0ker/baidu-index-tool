@@ -1,0 +1,51 @@
+name: Build macOS Apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x64
+            machine: x86_64
+          - runner: macos-15
+            arch: arm64
+            machine: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build native app
+        run: TARGET_ARCH=${{ matrix.arch }} ./build_macos.sh
+      - name: Verify architecture and interface
+        run: |
+          APP="dist/macos-${{ matrix.arch }}/百度指数查询工具.app"
+          EXECUTABLE="$APP/Contents/MacOS/百度指数查询工具"
+          test "$(lipo -archs "$EXECUTABLE")" = "${{ matrix.machine }}"
+          "$EXECUTABLE" --demo --ui-self-test-output "/tmp/ui-${{ matrix.arch }}.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("/tmp/ui-${{ matrix.arch }}.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          assert value["allPass"], value
+          PY
+          codesign --verify --deep --strict "$APP"
+      - name: Package app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/macos-${{ matrix.arch }}/百度指数查询工具.app" \
+            "百度指数查询工具-v2.4.0-macOS-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 百度指数查询工具-v2.4.0-macOS-${{ matrix.arch }}
+          path: 百度指数查询工具-v2.4.0-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "baidu-index-cross-platform"
+version = "2.4.0"
+description = "基于原程序静态逆向契约重构的跨平台指数查询工具"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+desktop = ["pywebview==6.1"]
+build = ["pywebview==6.1", "pyinstaller==6.21.0"]
+
+[project.scripts]
+baidu-index = "baidu_index_tool.cli:main"
+baidu-index-gui = "baidu_index_tool.webview_gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

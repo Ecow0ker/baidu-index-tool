@@ -1,0 +1,4 @@
+f610781d4665e8fca82ff4f6a65b06f6365afee85465d541fa1127e82c3dce65  百度指数查询工具-v2.4.0-macOS-x64.zip
+fe6bca8ce134c6eb99b3e6e6239119c0ce3a67697f53657007d62fa8f7584982  百度指数查询工具-v2.4.0-macOS-arm64.zip
+569ccd2a2d8b43aa9fcc65cb8fdfdb710d46dd0473c6f72f30f2871ad68d5a1c  百度指数查询工具-v2.4.0-Windows-x64.exe
+e02c9998c27b1cdd2e0111db6c37ae16f151134dacb7dbb2f18fb4d538ce09b3  百度指数查询工具-v2.4.0-GitHub源码.zip

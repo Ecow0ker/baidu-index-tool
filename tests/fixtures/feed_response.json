@@ -1,0 +1,15 @@
+{
+  "status": 0,
+  "message": "success",
+  "data": {
+    "uniqid": "fixture-feed-uniqid",
+    "index": [
+      {
+        "key": [{"name": "资讯测试", "wordType": 1}],
+        "startDate": "2025-01-01",
+        "endDate": "2025-01-03",
+        "data": "bakcakda"
+      }
+    ]
+  }
+}
