@@ -1,29 +1,35 @@
-# 百度指数跨平台查询工具 2.4.0
+# 百度指数查询工具
 
-> 欢迎关注微信公众号“经实研读”，或加入QQ群：610645081
+当前版本：`v2.4.0`
 
-这是按原 Windows 程序的静态分析结果重新实现的 Python 跨平台版本。Linux 保留命令行入口。
+Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
-## 功能
+## 主要功能
 
-- 关键词、日期、全国/省份/城市选择。
-- 搜索指数、资讯指数和品牌综合/搜索/资讯/互动指数。
-- 日级及周、月、季、年聚合。
-- 请求间隔倒计时、暂停、停止、进度和日志。
-- 软件内账号登录、Cookie 同步和多账号轮换。
-- Excel 兼容 CSV 导出；缺失值显示 `—`，数值零显示 `0`。
+- 批量输入关键词，一行一个。
+- 按开始日期和结束日期查询；图形界面支持日、周、月、年周期，命令行聚合另支持季度和全区间。
+- 选择全国、省份或城市，支持选择全部省份、选择全部城市和清空选择。
+- 查询搜索指数：PC+移动、PC 端、移动端、资讯指数。
+- 查询品牌指数：品牌指数、品牌搜索指数、品牌资讯指数、品牌互动指数。
+- 在软件内完成百度账号登录并同步 Cookie。
+- 保存多个账号，支持顺序轮换或随机切换。
+- 设置请求间隔，并显示倒计时、任务进度和运行日志。
+- 支持暂停、继续和停止查询。
+- 自定义导出目录；缺失值显示为 `—`，数值零显示为 `0`。
+- Linux 命令行支持搜索指数查询、地区检索和已有 CSV 聚合转换。
 
-逆向证据、函数地址和实现映射见 [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)。
+## 下载
 
-## 下载文件
+在 [GitHub Releases](https://github.com/Ecow0ker/baidu-index-tool/releases) 下载对应文件：
 
-| 系统 | 处理器 | GitHub Release 文件 |
+| 系统 | 处理器 | 文件 |
 |---|---|---|
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.0-windows-x64.exe` |
 | macOS | Intel | `baidu-index-tool-v2.4.0-macos-x64.zip` |
 | macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.0-macos-arm64.zip` |
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.0-windows-x64.exe` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.0-source.zip` |
 
-命名采用 GitHub 软件常见的 `macos-x64` 与 `macos-arm64` 架构后缀。macOS 解压后运行 APP；Windows 直接运行 EXE。
+Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
 
 macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也可执行：
 
@@ -31,7 +37,20 @@ macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也
 xattr -dr com.apple.quarantine /Applications/百度指数查询工具.app
 ```
 
-## 开发运行
+## 图形界面使用
+
+1. 打开“账号中心”，点击“打开登录窗口”。
+2. 在软件登录窗口完成登录，返回账号中心并点击“同步 Cookie”。
+3. 在“查询任务”中填写关键词和日期，选择地区、指数类型与指标。
+4. 设置提取间隔和导出目录，点击“开始查询”。
+5. 查询过程中可查看倒计时、进度和日志，也可暂停或停止任务。
+6. 完成后在结果表查看数据，或打开导出目录查看 CSV 文件。
+
+账号 Cookie 和账号切换设置保存在本机应用数据目录，不写入项目文件。请勿将个人 Cookie 提交到 GitHub。
+
+## 从源码运行图形界面
+
+### macOS
 
 ```bash
 python3 -m venv .webviewvenv
@@ -39,9 +58,22 @@ python3 -m venv .webviewvenv
 PYTHONPATH=src .webviewvenv/bin/python run_webview_gui.py
 ```
 
-Windows 也可双击 `Windows_启动图形界面.pyw`，macOS 可双击 `macOS_启动图形界面.command`。
+macOS 也可双击 `macOS_启动图形界面.command`。
 
-### Linux CLI
+### Windows
+
+```powershell
+py -3.12 -m venv .webviewvenv
+.\.webviewvenv\Scripts\python.exe -m pip install -r requirements-webview.txt
+$env:PYTHONPATH = "src"
+.\.webviewvenv\Scripts\python.exe run_webview_gui.py
+```
+
+Windows 也可双击 `Windows_启动图形界面.pyw`。
+
+## Linux 命令行
+
+查询搜索指数并导出 CSV：
 
 ```bash
 ./Linux_命令行.sh query \
@@ -51,68 +83,65 @@ Windows 也可双击 `Windows_启动图形界面.pyw`，macOS 可双击 `macOS_�
   --aggregate monthly --output ./data/北京-2025-01.csv
 ```
 
+关键词较多时，可使用 UTF-8 文本文件：
+
+```bash
+./Linux_命令行.sh query \
+  --keywords-file ./keywords.txt \
+  --start 2025-01-01 --end 2025-01-31 \
+  --area 全国 --cookie-file ./cookie.txt
+```
+
+查询地区名称和 area ID：
+
 ```bash
 ./Linux_命令行.sh regions 广东
+```
+
+将已有日级 CSV 聚合为周、月、季或年数据：
+
+```bash
 ./Linux_命令行.sh convert ./日级数据目录 \
   --aggregate yearly --method mean --output ./年度日均.csv
 ```
 
-## 构建
+Cookie 也可通过环境变量提供：
 
-### macOS Intel
+```bash
+export BAIDU_INDEX_COOKIE='COOKIE'
+```
+
+## 构建发行文件
+
+macOS Intel：
 
 ```bash
 TARGET_ARCH=x64 ./build_macos.sh
 ```
 
-输出：`dist/macos-x64/百度指数查询工具.app`。
-
-### macOS M 系列
+macOS Apple Silicon：
 
 ```bash
 TARGET_ARCH=arm64 ./build_macos.sh
 ```
 
-输出：`dist/macos-arm64/百度指数查询工具.app`。在 Intel Mac 上，脚本会使用系统 universal2 Python 交叉生成原生 arm64 APP；在 M 系列 Mac 上直接原生构建。
-
-GitHub Actions 使用：
-
-- `macos-15-intel` 构建 x64。
-- `macos-15` 构建 arm64。
-
-工作流文件：`.github/workflows/build-macos.yml`。
-
-### Windows
-
-Windows PowerShell：
+Windows x64：
 
 ```powershell
 .\build_windows.ps1
 ```
 
-在 macOS 上交叉生成 Windows x64 EXE：
-
-```bash
-./build_windows_python_releases.sh
-```
-
-输出：`dist/baidu-index-tool-v2.4.0-windows-x64.exe`。
-
-### 完整发行包
-
-完成三种二进制构建后运行：
-
-```bash
-./package_python_releases.sh
-```
-
-发行文件位于 `release/`，并生成 SHA-256 校验表和 GitHub 源码 ZIP。
+GitHub Actions 构建配置位于 `.github/workflows/`。
 
 ## 测试
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-PYTHONPATH=src python3 run_webview_gui.py --demo --auto-close-ms 3000
+PYTHONPATH=src python3 run_webview_gui.py --demo --ui-self-test-output ./ui-test.json
 ```
 
-测试覆盖请求间隔、品牌四指数、Cookie 同步、地区选择、界面文字、关于弹窗、暂停/停止、导出和日志。
+测试覆盖账号窗口、Cookie 同步、多账号切换、地区选择、搜索指数、品牌指数、请求间隔、暂停/停止、结果显示和 CSV 导出。
+
+## 联系
+
+欢迎关注微信公众号“经实研读”，或加入QQ群：610645081
