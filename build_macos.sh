@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$ROOT"
-VERSION=2.4.0
+VERSION=2.4.1
 TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 
 case "$TARGET_ARCH" in

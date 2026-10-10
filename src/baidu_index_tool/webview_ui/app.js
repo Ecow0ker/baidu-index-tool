@@ -57,8 +57,8 @@ function updateStatus(title,detail){$('statusTitle').textContent=title;$('status
 function setRunning(value){running=value;$('startBtn').disabled=value;$('stopBtn').disabled=!value;$('pauseBtn').disabled=!value;if(!value){paused=false;$('pauseBtn').textContent='Ⅱ 暂停'}}
 function setAccounts(value){
   $('accounts').value=value.text||'';$('strategy').value=value.strategy||$('strategy').value;
-  $('accountCount').textContent=`状态：${value.count||0} 个有效账号`;
-  $('accountState').innerHTML=`<i></i>${value.count?`账号正常 · ${value.count}`:'未保存账号'}`;$('accountState').classList.toggle('connected',Boolean(value.count));
+  $('accountCount').textContent=`已保存 ${value.count||0} 个账号`;
+  $('accountState').innerHTML=`<i></i>${value.count?`已保存账号 · ${value.count}`:'未保存账号'}`;$('accountState').classList.toggle('connected',Boolean(value.count));
 }
 async function syncCookies(){
   const button=$('syncCookies');button.disabled=true;$('syncState').textContent='正在提取 Cookie…';
@@ -85,7 +85,7 @@ window.__pythonEvent=(name,data)=>{
   if(name==='progress'){const p=Math.round(data.done/data.total*100);$('bar').style.width=`${p}%`;$('percent').textContent=`${p}%`;$('resultMeta').textContent=`进行中 · ${data.done}/${data.total} 个请求`}
   if(name==='batch')setRows(data.rows,false);
   if(name==='snapshot')setRows(data.rows,true);
-  if(name==='log'){updateStatus(data.text,data.text);addLog(data.text,'','success')}
+  if(name==='log'){updateStatus(data.text,data.detail||data.text);addLog(data.text,data.detail||'',data.kind||'info')}
 };
 
 $('keywords').oninput=updateCounts;$('interval').oninput=updateSummary;$('searchTab').onclick=()=>switchMode('search');$('brandTab').onclick=()=>switchMode('brand');
@@ -104,7 +104,7 @@ $('aboutModal').onclick=event=>{if(event.target===$('aboutModal'))$('aboutModal'
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){$('accountModal').classList.add('hidden');$('aboutModal').classList.add('hidden')}});
 $('openLogin').onclick=async()=>{const button=$('openLogin');button.disabled=true;try{const value=await api().open_login();$('syncState').textContent=value.opened?'登录窗口已打开；完成登录后点击同步 Cookie':(value.message||'登录窗口启动失败')}catch(error){$('syncState').textContent=`登录窗口启动失败：${error}`}finally{button.disabled=false}};
 $('syncCookies').onclick=syncCookies;
-$('saveAccounts').onclick=async()=>{const value=await api().save_accounts($('accounts').value,$('strategy').value);setAccounts(value);$('syncState').textContent=`已保存 ${value.count} 个账号`;addLog('账号设置已保存',`${value.count} 个有效账号`,'success')};
+$('saveAccounts').onclick=async()=>{const value=await api().save_accounts($('accounts').value,$('strategy').value);setAccounts(value);$('syncState').textContent=`已保存 ${value.count} 个账号`;addLog('账号设置已保存',`${value.count} 个账号`,'success')};
 $('accounts').oninput=()=>{$('accountCount').textContent=`状态：${$('accounts').value.split(/\r?\n/).filter(Boolean).length} 行`};
 $('startBtn').onclick=startQuery;$('stopBtn').onclick=async()=>{await api().cancel();updateStatus('正在停止','等待当前请求结束')};
 $('pauseBtn').onclick=async()=>{const value=await api().toggle_pause();paused=Boolean(value.paused);$('pauseBtn').textContent=paused?'▶ 继续':'Ⅱ 暂停';updateStatus(paused?'任务已暂停':'任务已继续',paused?'倒计时和后续请求已暂停':'继续执行查询任务');addLog(paused?'任务已暂停':'任务已继续','','warn')};

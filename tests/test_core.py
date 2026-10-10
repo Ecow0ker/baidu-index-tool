@@ -8,7 +8,7 @@ import unittest
 
 from baidu_index_tool.aggregate import aggregate_brand_points, aggregate_points
 from baidu_index_tool.api import (
-    AuthenticationError, BadRequestError, BaiduIndexClient, RateLimitError,
+    ApiError, AuthenticationError, BadRequestError, BaiduIndexClient, RateLimitError,
     parse_news_payload, parse_search_payload,
 )
 from baidu_index_tool.crypto import DecryptionError, build_translation_table, decrypt_series
@@ -142,6 +142,21 @@ class ApiTests(unittest.TestCase):
         with self.assertRaises(BadRequestError):
             client.query_keyword("测试", "2025-01-01", "2025-01-03")
 
+    def test_generic_10001_does_not_claim_account_is_limited(self):
+        transport = FakeTransport(search={"status": 10001, "message": "请求失败，请重试！"})
+        client = BaiduIndexClient("BDUSS=fixture", transport=transport, retries=2, retry_delay=0)
+        with self.assertRaisesRegex(ApiError, "接口状态 10001") as result:
+            client.query_keyword("测试", "2025-01-01", "2025-01-03")
+        self.assertNotIsInstance(result.exception, RateLimitError)
+        self.assertEqual(len(transport.calls), 1)
+
+    def test_explicit_rate_limit_switches_immediately(self):
+        transport = FakeTransport(search={"status": 10001, "message": "exceed speed limit"})
+        client = BaiduIndexClient("BDUSS=fixture", transport=transport, retries=2, retry_delay=0)
+        with self.assertRaises(RateLimitError):
+            client.query_keyword("测试", "2025-01-01", "2025-01-03")
+        self.assertEqual(len(transport.calls), 1)
+
     def test_news_uses_same_ptbk_decode(self):
         rows = parse_news_payload(
             fixture("search_response.json"), fixture("ptbk_response.json")["data"],
@@ -158,14 +173,14 @@ class ApiTests(unittest.TestCase):
         self.assertEqual([x.keyword for x in rows], ["资讯测试"] * 3)
         self.assertEqual([x.news for x in rows], [10, 20, 30])
 
-    def test_news_retries_reversed_rate_limit_status(self):
+    def test_news_rate_limit_is_not_retried_on_same_account(self):
         transport = SequencedNewsTransport()
         client = BaiduIndexClient(
             "BDUSS=fixture", transport=transport, retries=1, retry_delay=0,
         )
-        rows = client.query_news_keyword("测试", "2025-01-01", "2025-01-03", "北京")
-        self.assertEqual([x.news for x in rows], [10, 20, 30])
-        self.assertEqual(len(transport.calls), 3)
+        with self.assertRaises(RateLimitError):
+            client.query_news_keyword("测试", "2025-01-01", "2025-01-03", "北京")
+        self.assertEqual(len(transport.calls), 1)
 
     def test_brand_resolution_and_metric_query(self):
         transport = BrandTransport()

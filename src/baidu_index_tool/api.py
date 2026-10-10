@@ -231,7 +231,9 @@ class BaiduIndexClient:
             return
         if status in STATUS_NOT_LOGGED_IN or "未登录" in message or "no login" in message.lower():
             raise AuthenticationError("Cookie 已失效或账号未登录")
-        if status in STATUS_RATE_LIMIT or "限制" in message or "speed limit" in message.lower() or "异常访问" in message:
+        if status in STATUS_RATE_LIMIT or any(
+            marker in message for marker in ("频率", "过于频繁", "异常访问", "访问受限")
+        ) or "speed limit" in message.lower():
             raise RateLimitError("请求频率受限，请稍后重试")
         if status in STATUS_BAD_REQUEST or "bad request" in message.lower():
             raise BadRequestError("请求参数错误: %s" % (message or status))
@@ -289,9 +291,9 @@ class BaiduIndexClient:
                 if not rows:
                     raise NoDataError("该条件没有指数数据")
                 return rows
-            except AuthenticationError:
+            except (AuthenticationError, RateLimitError):
                 raise
-            except (RateLimitError, NetworkError, HttpError) as exc:
+            except (NetworkError, HttpError) as exc:
                 last_error = exc
                 if attempt >= self.retries:
                     raise
@@ -331,9 +333,9 @@ class BaiduIndexClient:
                 if not rows:
                     raise NoDataError("该条件没有资讯指数数据")
                 return rows
-            except AuthenticationError:
+            except (AuthenticationError, RateLimitError):
                 raise
-            except (RateLimitError, NetworkError, HttpError) as exc:
+            except (NetworkError, HttpError) as exc:
                 last_error = exc
                 if attempt >= self.retries:
                     raise

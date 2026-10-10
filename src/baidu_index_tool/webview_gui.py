@@ -25,7 +25,7 @@ from .task_logic import create_run_directory, output_filename, validate_task
 
 LOGIN_URL = "https://index.baidu.com/v2/index.html#/"
 APP_NAME = "百度指数查询工具"
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.4.1"
 
 
 def _account_path() -> pathlib.Path:
@@ -65,9 +65,12 @@ def _normalise_accounts(values: str | Sequence[str]) -> List[str]:
 
 
 def _merge_cookie_headers(account: str, browser: str) -> str:
-    """Add current browser/device cookies without replacing account tokens."""
-    values = _cookie_pairs(browser)
-    values.update(_cookie_pairs(account))
+    """Refresh device identifiers without importing another account's session."""
+    values = _cookie_pairs(account)
+    browser_values = _cookie_pairs(browser)
+    for name in ("BAIDUID", "BAIDUID_BFESS", "HMACCOUNT"):
+        if browser_values.get(name):
+            values[name] = browser_values[name]
     return "; ".join("%s=%s" % item for item in sorted(values.items()))
 
 
@@ -498,8 +501,12 @@ class SystemWebViewApi:
                         break
                     except (AuthenticationError, RateLimitError) as exc:
                         last_error = exc
-                        if position + 1 < len(cookies):
-                            self._emit("log", {"text": "账号受限，正在切换下一账号"})
+                        reason = "登录信息未通过校验" if isinstance(exc, AuthenticationError) else "请求频率受限"
+                        self._emit("log", {
+                            "text": "账号 %d/%d：%s" % (index + 1, len(cookies), reason),
+                            "detail": "正在尝试下一账号" if position + 1 < len(cookies) else "已尝试全部保存的账号",
+                            "kind": "warn",
+                        })
                 else:
                     if last_error:
                         raise last_error
@@ -511,13 +518,33 @@ class SystemWebViewApi:
                 ) for item in batch]
                 if include_news:
                     label = "资讯指数 · %s · %s" % (keyword, region.display_name)
-                    self._wait(interval, label)
-                    try:
-                        news = self._client(cookies[account_index], interval).query_news_keyword(
-                            keyword, config["startDate"], config["endDate"], region,
-                        )
-                    except NoDataError:
-                        news = []
+                    news = []
+                    last_news_error: Optional[Exception] = None
+                    order = [account_index] + [
+                        index for index in self._account_order(len(cookies), done, strategy)
+                        if index != account_index
+                    ]
+                    for position, index in enumerate(order):
+                        self._wait(interval, label)
+                        try:
+                            news = self._client(cookies[index], interval).query_news_keyword(
+                                keyword, config["startDate"], config["endDate"], region,
+                            )
+                            last_news_error = None
+                            break
+                        except NoDataError:
+                            last_news_error = None
+                            break
+                        except (AuthenticationError, RateLimitError) as exc:
+                            last_news_error = exc
+                            reason = "登录信息未通过校验" if isinstance(exc, AuthenticationError) else "请求频率受限"
+                            self._emit("log", {
+                                "text": "资讯指数账号 %d/%d：%s" % (index + 1, len(cookies), reason),
+                                "detail": "正在尝试下一账号" if position + 1 < len(order) else "已尝试全部保存的账号",
+                                "kind": "warn",
+                            })
+                    if last_news_error:
+                        raise last_news_error
                     news_by_date = {item.date: item.news for item in news}
                     batch = [replace(item, news=news_by_date.get(item.date)) for item in batch]
                 rows.extend(batch)
@@ -634,10 +661,9 @@ class SystemWebViewApi:
         self._pause_event.clear()
         document = self._load_account_document()
         cookies = list(document["cookies"])
-        # BAIDUID and related device cookies can rotate independently from the
-        # account token. Merge the native WebView's current values before each
-        # request so a saved account remains consistent with the signature
-        # browser and multi-account tokens stay distinct.
+        # Device identifiers can rotate independently from login credentials.
+        # Never import the native WebView's login/session cookies into a saved
+        # account: it may currently be signed in as a different user.
         try:
             login_window = self._ensure_login_window()
             browser_cookie = self._cookie_header(login_window.get_cookies() or []) if login_window else ""
@@ -856,7 +882,7 @@ def launch_system_webview(
                       checks.noCommunityNavigation = !document.querySelector('[data-page="community"]');
                       document.getElementById('aboutButton').click();
                       checks.aboutOpen = !document.getElementById('aboutModal').classList.contains('hidden');
-                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.0');
+                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.1');
                       checks.aboutContact = document.getElementById('aboutModal').innerText.includes('QQ群：610645081');
                       checks.aboutIcon = (() => {
                         const icon = document.querySelector('#aboutButton .aboutIcon');

@@ -1,6 +1,6 @@
 # 百度指数查询工具
 
-当前版本：`v2.4.0`
+当前版本：`v2.4.1`
 
 Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
@@ -24,10 +24,10 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 
 | 系统 | 处理器 | 文件 |
 |---|---|---|
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.0-windows-x64.exe` |
-| macOS | Intel | `baidu-index-tool-v2.4.0-macos-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.0-macos-arm64.zip` |
-| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.0-source.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.1-windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.1-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.1-macos-arm64.zip` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.1-source.zip` |
 
 Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
 
@@ -47,6 +47,12 @@ xattr -dr com.apple.quarantine /Applications/百度指数查询工具.app
 6. 完成后在结果表查看数据，或打开导出目录查看 CSV 文件。
 
 账号 Cookie 和账号切换设置保存在本机应用数据目录，不写入项目文件。请勿将个人 Cookie 提交到 GitHub。
+
+## 查询报错时
+
+- “已保存账号”表示本机有 Cookie 记录，不表示账号仍处于登录状态。若日志提示“登录信息未通过校验”，在软件内重新登录并同步 Cookie。
+- `接口状态 10001` 是查询接口的通用失败状态，日志会保留状态和返回信息，便于区分账号登录失效与请求频率限制。
+- 若明确提示“请求频率受限”，稍后再试，并适当调大提取间隔。
 
 ## 从源码运行图形界面
 

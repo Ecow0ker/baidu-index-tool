@@ -28,9 +28,9 @@ button:disabled { cursor: default; opacity: .48; }
 .appLogo { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; box-shadow: 0 6px 18px #0f64d62a; }
 .heading h1 { margin: 0; font-size: 20px; letter-spacing: -.2px; }
 .heading p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-.account { padding: 7px 11px; border-radius: 16px; display: flex; align-items: center; gap: 7px; background: #f1f7f4; color: #3e7257; font-weight: 700; font-size: 13px; }
+.account { padding: 7px 11px; border-radius: 16px; display: flex; align-items: center; gap: 7px; background: #edf3ff; color: #2b5d9c; font-weight: 700; font-size: 13px; }
 .account i { width: 7px; height: 7px; border-radius: 50%; background: #9aa9ba; }
-.account.connected i { background: var(--green); box-shadow: 0 0 0 4px #22b66f1c; }
+.account.connected i { background: var(--blue); box-shadow: 0 0 0 4px #146ef51c; }
 .accountButton { box-shadow: none; }
 .buttonIcon { margin-right: 5px; }
 

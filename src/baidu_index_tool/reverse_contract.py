@@ -36,7 +36,9 @@ REFERER = "https://index.baidu.com/v2/main/index.html"
 # Original ptbk request/decode routine: function 0x0041934f, string at
 # VA 0x005d1221.  Status fixtures appear at 0x005d10f3..0x005d11af.
 STATUS_NOT_LOGGED_IN = {10000, "10000"}
-STATUS_RATE_LIMIT = {10001, "10001", 10018, "10018"}
+# The current website displays 10001 as a generic request failure. Only
+# classify it as a rate limit when the response message explicitly says so.
+STATUS_RATE_LIMIT = {10018, "10018"}
 STATUS_BAD_REQUEST = {10002, "10002"}
 
 # CSV literals referenced by functions 0x00405dde and 0x00439a03.

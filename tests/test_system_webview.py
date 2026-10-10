@@ -10,9 +10,10 @@ import unittest
 from http.cookies import SimpleCookie
 
 from baidu_index_tool.reverse_contract import BRAND_PATHS
-from baidu_index_tool.models import BrandEntity, BrandIndexPoint
+from baidu_index_tool.models import BrandEntity, BrandIndexPoint, IndexPoint
 from baidu_index_tool.regions import resolve_region
-from baidu_index_tool.webview_gui import SystemWebViewApi, _merge_cookie_headers, _row_dict
+from baidu_index_tool.api import AuthenticationError, RateLimitError
+from baidu_index_tool.webview_gui import SystemWebViewApi, _cookie_pairs, _merge_cookie_headers, _row_dict
 
 
 class _EventWindow:
@@ -263,12 +264,65 @@ class SystemWebViewTests(unittest.TestCase):
 
     def test_device_cookie_merge_preserves_each_account_token(self):
         merged = _merge_cookie_headers(
-            "BDUSS_BFESS=account-token; BAIDUID=old-device",
-            "BAIDUID=current-device; HMACCOUNT=device-count",
+            "BDUSS_BFESS=account-token; BAIDUID=old-device; RT=account-session",
+            "BDUSS=other-account; BAIDUID=current-device; HMACCOUNT=device-count; RT=other-session",
         )
-        self.assertIn("BDUSS_BFESS=account-token", merged)
-        self.assertIn("BAIDUID=old-device", merged)
-        self.assertIn("HMACCOUNT=device-count", merged)
+        pairs = _cookie_pairs(merged)
+        self.assertEqual(pairs["BDUSS_BFESS"], "account-token")
+        self.assertNotIn("BDUSS", pairs)
+        self.assertEqual(pairs["BAIDUID"], "current-device")
+        self.assertEqual(pairs["HMACCOUNT"], "device-count")
+        self.assertEqual(pairs["RT"], "account-session")
+
+        reverse = _cookie_pairs(_merge_cookie_headers(
+            "BDUSS=account-token", "BDUSS_BFESS=other-account; BAIDUID=current-device",
+        ))
+        self.assertEqual(reverse["BDUSS"], "account-token")
+        self.assertNotIn("BDUSS_BFESS", reverse)
+
+    def test_search_and_news_switch_accounts_without_reusing_other_login(self):
+        class AccountClient:
+            def __init__(self, cookie, calls):
+                self.cookie = cookie
+                self.calls = calls
+
+            def query_keyword(self, *_args):
+                self.calls.append(("search", self.cookie))
+                if self.cookie == "first":
+                    raise AuthenticationError("expired")
+                return [IndexPoint(
+                    "测试", "2025-01-01", "全国", "全国", 10, 6, 4,
+                )]
+
+            def query_news_keyword(self, *_args):
+                self.calls.append(("news", self.cookie))
+                if self.cookie == "first":
+                    raise AuthenticationError("expired")
+                if self.cookie == "second":
+                    raise RateLimitError("limited")
+                return [IndexPoint(
+                    "测试", "2025-01-01", "全国", "全国", None, None, None, 8,
+                )]
+
+        calls = []
+        main = _EventWindow()
+        api = SystemWebViewApi()
+        api.bind_windows(main, None)
+        api._wait = lambda *_args: None
+        api._client = lambda cookie, _interval: AccountClient(cookie, calls)
+        rows = api._query_search({
+            "keywords": ["测试"], "startDate": "2025-01-01", "endDate": "2025-01-01",
+            "interval": 0, "strategy": "round_robin", "searchChannels": ["overall", "news"],
+        }, ["first", "second", "third"], [resolve_region("全国")])
+        self.assertEqual(calls, [
+            ("search", "first"), ("search", "second"),
+            ("news", "second"), ("news", "first"), ("news", "third"),
+        ])
+        self.assertEqual((rows[0].overall, rows[0].news), (10, 8))
+        emitted = "\n".join(main.scripts)
+        self.assertIn("登录信息未通过校验", emitted)
+        self.assertIn("请求频率受限", emitted)
+        self.assertNotIn("账号受限，正在切换下一账号", emitted)
 
     def test_signature_uses_preloaded_query_window(self):
         api = SystemWebViewApi()
@@ -392,7 +446,7 @@ class SystemWebViewTests(unittest.TestCase):
         self.assertNotIn('>沟通交流<', html)
         self.assertIn('id="aboutButton"', html)
         self.assertIn('class="aboutIcon"', html)
-        self.assertIn('版本：v2.4.0', html)
+        self.assertIn('版本：v2.4.1', html)
         self.assertIn('QQ群：610645081', html)
         self.assertIn("$('aboutButton').onclick=openAbout", script)
         self.assertNotIn("if(page==='community')", script)
