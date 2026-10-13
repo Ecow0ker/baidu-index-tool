@@ -8,7 +8,7 @@ BUILD="$ROOT/.windows-python-build"
 LAUNCHER="$ROOT/windows_python_launcher"
 PYTHON=${PYTHON:-python3}
 PYTHON_VERSION=3.12.10
-VERSION=2.4.2
+VERSION=2.4.3
 OUTPUT="$ROOT/dist/baidu-index-tool-v${VERSION}-windows-x64.exe"
 mkdir -p "$CACHE" "$WEB_CACHE" "$BUILD" "$ROOT/dist"
 
@@ -18,6 +18,7 @@ fetch() {
   [ -f "$output" ] || curl --fail --location --retry 10 --retry-all-errors "$url" --output "$output"
 }
 fetch "https://www.python.org/ftp/python/$PYTHON_VERSION/python-$PYTHON_VERSION-embed-amd64.zip" "$CACHE/python-$PYTHON_VERSION-embed-amd64.zip"
+"$PYTHON" -m pip download --disable-pip-version-check --no-deps --dest "$WEB_CACHE" "truststore==0.10.5"
 
 if [ ! -f "$WEB_CACHE/pywebview-6.1-py3-none-any.whl" ]; then
   "$PYTHON" -m pip download --disable-pip-version-check --no-deps --dest "$WEB_CACHE" "pywebview==6.1"

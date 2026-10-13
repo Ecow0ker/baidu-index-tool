@@ -1,6 +1,6 @@
 # 百度指数查询工具
 
-当前版本：`v2.4.2`
+当前版本：`v2.4.3`
 
 Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
@@ -26,10 +26,10 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 
 | 系统 | 处理器 | 文件 |
 |---|---|---|
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.2-windows-x64.exe` |
-| macOS | Intel | `baidu-index-tool-v2.4.2-macos-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.2-macos-arm64.zip` |
-| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.2-source.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.3-windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.3-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.3-macos-arm64.zip` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.3-source.zip` |
 
 Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
 
@@ -58,6 +58,8 @@ xattr -dr com.apple.quarantine /Applications/百度指数查询工具.app
 
 ## 查询报错时
 
+- Windows/macOS 的 HTTPS 使用系统证书信任库，证书和域名验证始终开启；不依赖构建电脑上的证书路径。
+- 若提示“HTTPS 证书验证失败”，检查系统日期；使用 HTTPS 代理时，其证书需要已受操作系统信任。此错误发生在接口请求阶段，不代表账号登录失效。
 - “已保存账号”表示本机有 Cookie 记录，不表示账号仍处于登录状态。若日志提示“登录信息未通过校验”，在软件内重新登录并同步 Cookie。
 - `接口状态 10001` 是查询接口的通用失败状态，日志会保留状态和返回信息，便于区分账号登录失效与请求频率限制。
 - 若明确提示“请求频率受限”，稍后再试，并适当调大提取间隔。

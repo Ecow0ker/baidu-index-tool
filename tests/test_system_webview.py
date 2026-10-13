@@ -446,7 +446,7 @@ class SystemWebViewTests(unittest.TestCase):
         self.assertNotIn('>沟通交流<', html)
         self.assertIn('id="aboutButton"', html)
         self.assertIn('class="aboutIcon"', html)
-        self.assertIn('版本：v2.4.2', html)
+        self.assertIn('版本：v2.4.3', html)
         self.assertIn('QQ群：610645081', html)
         self.assertIn("$('aboutButton').onclick=openAbout", script)
         self.assertNotIn("if(page==='community')", script)

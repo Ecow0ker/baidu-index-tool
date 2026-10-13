@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$ROOT"
-VERSION=2.4.2
+VERSION=2.4.3
 TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 
 case "$TARGET_ARCH" in
@@ -45,6 +45,7 @@ fi
   --specpath "$SPECS" \
   --paths "$ROOT/src" \
   --hidden-import webview.platforms.cocoa \
+  --collect-submodules truststore \
   --icon "$ROOT/assets/econ-index-icon.icns" \
   --add-data "$ROOT/src/baidu_index_tool/webview_ui:baidu_index_tool/webview_ui" \
   --exclude-module cefpython3 \

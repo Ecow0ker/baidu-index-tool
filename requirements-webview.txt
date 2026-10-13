@@ -1,5 +1,6 @@
 pywebview==6.1
 pyinstaller==6.21.0
+truststore==0.10.5
 # Xcode/CommandLineTools Python 3.8 is universal2 and is used for local arm64 cross-builds.
 pyobjc-core==10.3.2; python_version < "3.9" and sys_platform == "darwin"
 pyobjc-framework-Cocoa==10.3.2; python_version < "3.9" and sys_platform == "darwin"

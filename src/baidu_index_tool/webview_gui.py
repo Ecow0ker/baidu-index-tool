@@ -7,6 +7,7 @@ import math
 import os
 import pathlib
 import platform
+import ssl
 import subprocess
 import sys
 import threading
@@ -25,7 +26,7 @@ from .task_logic import create_run_directory, output_filename, validate_task
 
 LOGIN_URL = "https://index.baidu.com/v2/index.html#/"
 APP_NAME = "百度指数查询工具"
-APP_VERSION = "2.4.2"
+APP_VERSION = "2.4.3"
 
 
 def _account_path() -> pathlib.Path:
@@ -879,6 +880,8 @@ def launch_system_webview(
     auto_close_ms: int = 0,
     folder_dialog_demo: bool = False,
     ui_self_test_output: str = "",
+    query_self_test_output: str = "",
+    query_self_test_config: str = "",
 ) -> int:
     import webview
 
@@ -922,6 +925,61 @@ def launch_system_webview(
                 except Exception:
                     pass
         threading.Thread(target=prepare_login_page, daemon=True).start()
+        if query_self_test_output:
+            def run_query_self_test() -> None:
+                output = pathlib.Path(query_self_test_output).expanduser()
+                requests: List[Dict[str, Any]] = []
+                contexts: List[Dict[str, Any]] = []
+                payload: Dict[str, Any] = {"version": APP_VERSION, "frozen": bool(getattr(sys, "frozen", False))}
+                try:
+                    main_window.events.loaded.wait(20)
+                    config = json.loads(pathlib.Path(query_self_test_config).read_text(encoding="utf-8"))
+                    # Only query settings are accepted; credentials come from
+                    # the existing local account store and are never recorded.
+                    allowed = ("keywords", "regionIds", "startDate", "endDate", "period", "indexMode",
+                               "searchChannels", "brandChannels", "interval", "outputDir")
+                    config = {key: config[key] for key in allowed if key in config}
+                    payload["input"] = config
+                    original_client = api._client
+
+                    def recorded_client(cookie, interval):
+                        client = original_client(cookie, interval)
+                        native = client.transport
+                        contexts.append({"certificateRequired": native.context.verify_mode == ssl.CERT_REQUIRED,
+                                         "hostnameVerified": native.context.check_hostname,
+                                         "tlsBackend": type(native.context).__module__})
+
+                        class RecordedTransport:
+                            def get_json(self, url, params, headers):
+                                result = native.get_json(url, params, headers)
+                                requests.append({"endpoint": url.split("?", 1)[0], "status": result.get("status")})
+                                return result
+
+                            def post_json(self, url, body, headers):
+                                result = native.post_json(url, body, headers)
+                                requests.append({"endpoint": url.split("?", 1)[0], "status": result.get("status")})
+                                return result
+
+                        client.transport = RecordedTransport()
+                        return client
+
+                    api._client = recorded_client
+                    result = api.query(config)
+                    payload.update({key: result[key] for key in (
+                        "completed", "total", "rowCount", "incomplete", "blocked", "message", "outputs")})
+                    payload["success"] = not result["incomplete"] and result["rowCount"] > 0
+                    payload["firstDate"] = result["rows"][0]["date"] if result["rows"] else None
+                    payload["lastDate"] = result["rows"][-1]["date"] if result["rows"] else None
+                    main_window.evaluate_js("showQueryResult(%s)" % json.dumps(result, ensure_ascii=False))
+                except Exception as exc:
+                    payload.update(success=False, errorType=type(exc).__name__, message=str(exc))
+                finally:
+                    payload.update(requests=requests, tlsContexts=contexts)
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                    api.shutdown()
+                    main_window.destroy()
+            threading.Thread(target=run_query_self_test, daemon=True).start()
         if ui_self_test_output:
             def run_ui_self_test() -> None:
                 output = pathlib.Path(ui_self_test_output).expanduser()
@@ -1018,7 +1076,7 @@ def launch_system_webview(
                       checks.noCommunityNavigation = !document.querySelector('[data-page="community"]');
                       document.getElementById('aboutButton').click();
                       checks.aboutOpen = !document.getElementById('aboutModal').classList.contains('hidden');
-                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.2');
+                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.3');
                       checks.aboutContact = document.getElementById('aboutModal').innerText.includes('QQ群：610645081');
                       checks.aboutIcon = (() => {
                         const icon = document.querySelector('#aboutButton .aboutIcon');
@@ -1117,8 +1175,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--auto-close-ms", type=int, default=0)
     parser.add_argument("--folder-dialog-demo", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--ui-self-test-output", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--tls-self-test-output", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--query-self-test-output", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--query-self-test-config", default="", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    return launch_system_webview(args.demo, args.auto_close_ms, args.folder_dialog_demo, args.ui_self_test_output)
+    if args.tls_self_test_output:
+        from .transport import check_https
+        try:
+            result = check_https()
+        except Exception as exc:
+            result = {"success": False, "errorType": type(exc).__name__, "message": str(exc),
+                      "frozen": bool(getattr(sys, "frozen", False))}
+        output = pathlib.Path(args.tls_self_test_output).expanduser()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return 0 if result["success"] else 1
+    if args.query_self_test_output and not args.query_self_test_config:
+        parser.error("query self-test requires a configuration file")
+    return launch_system_webview(args.demo, args.auto_close_ms, args.folder_dialog_demo, args.ui_self_test_output,
+                                args.query_self_test_output, args.query_self_test_config)
 
 
 if __name__ == "__main__":

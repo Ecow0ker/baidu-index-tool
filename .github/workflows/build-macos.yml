@@ -30,6 +30,14 @@ jobs:
           APP="dist/macos-${{ matrix.arch }}/百度指数查询工具.app"
           EXECUTABLE="$APP/Contents/MacOS/百度指数查询工具"
           test "$(lipo -archs "$EXECUTABLE")" = "${{ matrix.machine }}"
+          "$EXECUTABLE" --tls-self-test-output "/tmp/tls-${{ matrix.arch }}.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path("/tmp/tls-${{ matrix.arch }}.json").read_text())
+          assert result["success"] and result["frozen"] and result["certificateRequired"] and result["hostnameVerified"], result
+          print("Frozen HTTPS check:", result)
+          PY
           "$EXECUTABLE" --demo --ui-self-test-output "/tmp/ui-${{ matrix.arch }}.json"
           python3 - <<'PY'
           import json
@@ -43,9 +51,9 @@ jobs:
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/macos-${{ matrix.arch }}/百度指数查询工具.app" \
-            "baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}.zip"
+            "baidu-index-tool-v2.4.3-macos-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v7
         with:
-          name: baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}
-          path: baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}.zip
+          name: baidu-index-tool-v2.4.3-macos-${{ matrix.arch }}
+          path: baidu-index-tool-v2.4.3-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
