@@ -63,7 +63,7 @@ class NoDataTests(unittest.TestCase):
             self.assertEqual(calls, PROVINCES)
             with pathlib.Path(result["outputs"][0]).open(encoding="utf-8-sig") as stream:
                 self.assertEqual(len(list(csv.DictReader(stream))), 899)
-            record = json.loads(pathlib.Path(result["checkpoint"]).read_text())
+            record = json.loads(pathlib.Path(result["checkpoint"]).read_text(encoding="utf-8"))
             self.assertTrue(record["complete"])
             self.assertEqual(len(record["noDataTasks"]), 5)
             self.assertEqual(len(record["noDataDetails"]), 5)
@@ -109,7 +109,7 @@ class NoDataTests(unittest.TestCase):
             self.assertEqual(calls, [918, 911, 911])
             fresh = api.query(dict(settings, keywords=["新关键词"]))
             self.assertEqual(fresh["noDataCount"], 1)
-            self.assertEqual(len(json.loads(pathlib.Path(fresh["checkpoint"]).read_text())["noDataDetails"]), 1)
+            self.assertEqual(len(json.loads(pathlib.Path(fresh["checkpoint"]).read_text(encoding="utf-8"))["noDataDetails"]), 1)
 
     def test_news_survives_empty_search_and_missing_search_values_are_not_zero(self):
         class Client:
@@ -200,7 +200,7 @@ class NoDataTests(unittest.TestCase):
 
 
 def window_transport(missing):
-    key = json.loads((pathlib.Path(__file__).parent / "fixtures/ptbk_response.json").read_text())["data"]
+    key = json.loads((pathlib.Path(__file__).parent / "fixtures/ptbk_response.json").read_text(encoding="utf-8"))["data"]
     inverse = {value: name for name, value in build_translation_table(key).items()}
 
     class Transport:
