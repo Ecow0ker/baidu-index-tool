@@ -95,7 +95,7 @@ button:disabled { cursor: default; opacity: .48; }
 .startButton span { margin-right: 7px; }
 
 .resultWorkspace { min-width: 0; padding: 14px; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
-.summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 9px; }
+.summaryGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
 .summaryGrid article { min-width: 0; height: 70px; padding: 11px 13px; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
 .summaryIcon { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; font-size: 18px; font-weight: 800; }
 .summaryIcon.blue { color: var(--blue); background: #eaf3ff; }.summaryIcon.green { color: var(--green); background: #e9f9f1; }.summaryIcon.amber { color: var(--amber); background: #fff5df; }.summaryIcon.violet { color: #7659e8; background: #f0ecff; }
@@ -175,7 +175,7 @@ body.logCollapsed .activityFoot button { writing-mode: vertical-rl; padding: 9px
   .workspace { grid-template-columns: 90px 310px minmax(504px, 1fr) 210px; }
   .configPanel { padding: 12px; }
   .summaryGrid article { padding: 9px; }
-  .summaryIcon { width: 31px; height: 31px; }
+  .summaryIcon { display: none; }
 }
 
 @media (max-width: 1240px) {

@@ -26,7 +26,7 @@ from .task_logic import create_run_directory, output_filename, validate_task
 
 LOGIN_URL = "https://index.baidu.com/v2/index.html#/"
 APP_NAME = "百度指数查询工具"
-APP_VERSION = "2.4.3"
+APP_VERSION = "2.4.4"
 
 
 def _account_path() -> pathlib.Path:
@@ -102,6 +102,7 @@ class SystemWebViewApi:
         self._request_label = "查询"
         self._task_rows: Dict[Tuple[int, str], List[Any]] = {}
         self._completed_tasks: set[Tuple[int, str]] = set()
+        self._no_data_details: Dict[Tuple[int, str], List[Dict[str, Any]]] = {}
         self._task_key = ""
         self._run_directory: Optional[Tuple[pathlib.Path, str]] = None
         self._brand_entities: Dict[str, Any] = {}
@@ -494,7 +495,24 @@ class SystemWebViewApi:
         return BaiduIndexClient(
             cookie, timeout=25, retries=2, retry_delay=max(2.0, interval),
             signature_provider=self._signature, before_request=before_request,
+            on_no_data=self._record_no_data,
         )
+
+    def _record_no_data(self, metric: str, keyword: str, region: Region, start: str, end: str) -> None:
+        detail = {"metric": metric, "keyword": keyword, "areaId": region.area_id,
+                  "region": region.display_name, "startDate": start, "endDate": end}
+        records = self._no_data_details.setdefault((region.area_id, keyword), [])
+        if detail not in records:
+            records.append(detail)
+            label = {"search": "搜索指数", "news": "资讯指数", "selected": "所选指标",
+                     "brand_index": "品牌指数", "brand_search": "品牌搜索指数",
+                     "brand_news": "品牌资讯指数", "brand_interaction": "品牌互动指数"}.get(metric, metric)
+            self._emit("log", {"text": "无数据 · %s · %s" % (keyword, region.display_name),
+                               "detail": "%s · %s 至 %s；缺失不按 0 处理" % (label, start, end), "kind": "warn"})
+
+    def _task_counts(self) -> Dict[str, int]:
+        no_data = sum(not self._task_rows.get(key) for key in self._completed_tasks)
+        return {"dataCount": len(self._completed_tasks) - no_data, "noDataCount": no_data}
 
     def _store_task_rows(self, key: Tuple[int, str], rows: Sequence[Any], complete: bool = False) -> None:
         self._task_rows[key] = list(rows)
@@ -529,6 +547,7 @@ class SystemWebViewApi:
                 task_key = (region.area_id, keyword)
                 if task_key in self._completed_tasks:
                     continue
+                self._no_data_details.pop(task_key, None)
                 last_error: Optional[Exception] = None
                 batch: List[IndexPoint] = []
                 account_index = 0
@@ -540,6 +559,13 @@ class SystemWebViewApi:
                             keyword, config["startDate"], config["endDate"], region,
                         )
                         account_index = index
+                        break
+                    except NoDataError as exc:
+                        batch = list(getattr(exc, "partial_rows", []))
+                        account_index = index
+                        if not self._no_data_details.get(task_key):
+                            self._record_no_data("search", keyword, region, config["startDate"], config["endDate"])
+                        # A valid empty result does not need another account.
                         break
                     except (AuthenticationError, RateLimitError) as exc:
                         last_error = exc
@@ -584,7 +610,10 @@ class SystemWebViewApi:
                             )
                             last_news_error = None
                             break
-                        except NoDataError:
+                        except NoDataError as exc:
+                            news = list(getattr(exc, "partial_rows", []))
+                            if not any(item["metric"] == "news" for item in self._no_data_details.get(task_key, [])):
+                                self._record_no_data("news", keyword, region, config["startDate"], config["endDate"])
                             last_news_error = None
                             break
                         except (AuthenticationError, RateLimitError) as exc:
@@ -596,19 +625,30 @@ class SystemWebViewApi:
                                 "kind": "warn",
                             })
                         except Exception as exc:
-                            news_by_date = {item.date: item.news for item in getattr(exc, "partial_rows", [])}
-                            self._store_task_rows(task_key, [replace(item, news=news_by_date.get(item.date)) for item in batch])
+                            self._store_task_rows(task_key, self._merge_news(batch, getattr(exc, "partial_rows", [])))
                             raise
                     if last_news_error:
                         raise last_news_error
-                    news_by_date = {item.date: item.news for item in news}
-                    batch = [replace(item, news=news_by_date.get(item.date)) for item in batch]
+                    batch = self._merge_news(batch, news)
+                if not any(any(value is not None for value in (item.overall, item.pc, item.mobile, item.news)) for item in batch):
+                    batch = []
+                    if not self._no_data_details.get(task_key):
+                        self._record_no_data("selected", keyword, region, config["startDate"], config["endDate"])
                 self._store_task_rows(task_key, batch, complete=True)
                 rows.extend(batch)
                 done += 1
                 self._emit_rows("batch", batch)
-                self._emit("progress", {"done": done, "total": total, "label": "%s · %s" % (keyword, region.display_name)})
+                self._emit("progress", {"done": done, "total": total, **self._task_counts(),
+                                        "label": "%s · %s" % (keyword, region.display_name)})
         return rows
+
+    @staticmethod
+    def _merge_news(search: Sequence[IndexPoint], news: Sequence[IndexPoint]) -> List[IndexPoint]:
+        merged = {item.date: item for item in search}
+        for item in news:
+            existing = merged.get(item.date)
+            merged[item.date] = replace(existing, news=item.news) if existing else replace(item, overall=None, pc=None, mobile=None)
+        return [merged[date] for date in sorted(merged)]
 
     def _query_brand(self, config: Dict[str, Any], cookies: Sequence[str], regions: Sequence[Region]) -> List[BrandIndexPoint]:
         rows: List[BrandIndexPoint] = [
@@ -629,6 +669,7 @@ class SystemWebViewApi:
                 task_key = (region.area_id, keyword)
                 if task_key in self._completed_tasks:
                     continue
+                self._no_data_details.pop(task_key, None)
                 # Resolve lazily so the first keyword starts streaming metric
                 # rows immediately; cache the entity for all later regions.
                 if keyword not in entities:
@@ -649,7 +690,7 @@ class SystemWebViewApi:
                             raise last_error
                         raise NoDataError("未匹配到品牌：%s" % keyword)
                     request_done += 1
-                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), "label": logical_label})
+                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), **self._task_counts(), "label": logical_label})
                 entity = entities[keyword]
                 merged: Dict[str, BrandIndexPoint] = {}
                 for metric_index, metric in enumerate(metrics):
@@ -668,9 +709,10 @@ class SystemWebViewApi:
                             )
                             last_error = None
                             break
-                        except NoDataError:
+                        except NoDataError as exc:
                             last_error = None
-                            metric_rows = []
+                            metric_rows = list(getattr(exc, "partial_rows", []))
+                            self._record_no_data(metric, keyword, region, config["startDate"], config["endDate"])
                             break
                         except (AuthenticationError, RateLimitError) as exc:
                             last_error = exc
@@ -692,12 +734,12 @@ class SystemWebViewApi:
                     partial = [merged[key] for key in sorted(merged)]
                     self._store_task_rows(task_key, partial)
                     self._emit_rows("snapshot", rows + partial)
-                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), "label": label})
+                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), **self._task_counts(), "label": label})
                 batch = [merged[key] for key in sorted(merged)]
                 self._store_task_rows(task_key, batch, complete=True)
                 rows.extend(batch)
                 task_done += 1
-                self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": task_done, "label": label})
+                self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": task_done, **self._task_counts(), "label": label})
         return rows
 
     def _export(self, rows: Sequence[IndexPoint | BrandIndexPoint], config: Dict[str, Any]) -> Tuple[List[str], str]:
@@ -740,7 +782,7 @@ class SystemWebViewApi:
         try:
             if rows:
                 outputs, run_dir = self._export(rows, config)
-            if incomplete:
+            if incomplete or self._completed_tasks:
                 if self._run_directory is None:
                     output_root = pathlib.Path(config.get("outputDir") or pathlib.Path.home() / "Downloads" / "百度指数数据")
                     self._run_directory = create_run_directory(output_root)
@@ -749,11 +791,15 @@ class SystemWebViewApi:
                 # Save raw daily values so aggregated CSVs are not used as a
                 # resume source. Credentials are excluded from this document.
                 document = {
+                    "complete": not incomplete, "completed": len(self._completed_tasks), "total": total,
+                    **self._task_counts(),
                     "config": {key: config[key] for key in (
                         "keywords", "regionIds", "startDate", "endDate", "period", "indexMode",
                         "searchChannels", "brandChannels", "interval", "outputDir",
                     ) if key in config},
                     "completedTasks": [list(key) for key in sorted(self._completed_tasks)],
+                    "noDataTasks": [list(key) for key in sorted(self._completed_tasks) if not self._task_rows.get(key)],
+                    "noDataDetails": [detail for records in self._no_data_details.values() for detail in records],
                     "batches": [{"areaId": key[0], "keyword": key[1], "rows": [_row_dict(item) for item in batch]}
                                 for key, batch in self._task_rows.items()],
                     "error": message,
@@ -762,12 +808,6 @@ class SystemWebViewApi:
                 temporary.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
                 temporary.replace(path)
                 checkpoint = str(path)
-            elif self._run_directory:
-                # A completed resume replaces the interrupted marker with its
-                # final completion state; it must not remain a stale checkpoint.
-                path = self._run_directory[0] / "查询进度.json"
-                if path.exists():
-                    path.write_text(json.dumps({"complete": True, "completed": total}, ensure_ascii=False), encoding="utf-8")
         except (OSError, ValueError) as exc:
             incomplete = True
             message = (message + "；" if message else "") + "保存结果失败：%s" % exc
@@ -775,6 +815,7 @@ class SystemWebViewApi:
             "cancelled": cancelled, "blocked": blocked, "incomplete": incomplete,
             "canResume": incomplete and len(self._completed_tasks) < total,
             "message": message, "completed": len(self._completed_tasks), "total": total,
+            **self._task_counts(),
             "rows": [_row_dict(item) for item in rows[-2000:]], "rowCount": len(rows), "outputs": outputs,
             "runDir": run_dir, "checkpoint": checkpoint,
         }
@@ -817,6 +858,7 @@ class SystemWebViewApi:
         if not resumed:
             self._task_rows = {}
             self._completed_tasks = set()
+            self._no_data_details = {}
             self._brand_entities = {}
             self._run_directory = None
         self._task_key = task_key
@@ -824,7 +866,7 @@ class SystemWebViewApi:
             self._emit_rows("snapshot", [item for key, batch in self._task_rows.items()
                                          if key in self._completed_tasks for item in batch])
         self._emit("progress", {"done": len(self._completed_tasks), "total": len(keywords) * len(regions),
-                                "completedTasks": len(self._completed_tasks), "label": "任务已恢复" if resumed else "任务已创建"})
+                                "completedTasks": len(self._completed_tasks), **self._task_counts(), "label": "任务已恢复" if resumed else "任务已创建"})
         try:
             if index_mode == "brand":
                 self._query_brand(config, cookies, regions)
@@ -952,7 +994,16 @@ def launch_system_webview(
                         class RecordedTransport:
                             def get_json(self, url, params, headers):
                                 result = native.get_json(url, params, headers)
-                                requests.append({"endpoint": url.split("?", 1)[0], "status": result.get("status")})
+                                record = {"endpoint": url.split("?", 1)[0], "status": result.get("status")}
+                                data = result.get("data")
+                                if isinstance(data, dict) and isinstance(data.get("userIndexes"), list):
+                                    record["seriesSummary"] = [
+                                        {"type": item.get("type", "day"), "channels": {
+                                            name: {"length": len(str(value.get("data") or "")),
+                                                   "startDate": value.get("startDate"), "endDate": value.get("endDate")}
+                                            for name, value in item.items() if name in ("all", "pc", "wise", "mobile", "_all", "_pc", "_wise") and isinstance(value, dict)}}
+                                        for item in data["userIndexes"] if isinstance(item, dict)]
+                                requests.append(record)
                                 return result
 
                             def post_json(self, url, body, headers):
@@ -966,8 +1017,9 @@ def launch_system_webview(
                     api._client = recorded_client
                     result = api.query(config)
                     payload.update({key: result[key] for key in (
-                        "completed", "total", "rowCount", "incomplete", "blocked", "message", "outputs")})
-                    payload["success"] = not result["incomplete"] and result["rowCount"] > 0
+                        "completed", "total", "dataCount", "noDataCount", "rowCount", "incomplete", "blocked", "message", "outputs", "checkpoint", "runDir")})
+                    payload["success"] = not result["incomplete"] and result["completed"] == result["total"]
+                    payload["hasData"] = result["rowCount"] > 0
                     payload["firstDate"] = result["rows"][0]["date"] if result["rows"] else None
                     payload["lastDate"] = result["rows"][-1]["date"] if result["rows"] else None
                     main_window.evaluate_js("showQueryResult(%s)" % json.dumps(result, ensure_ascii=False))
@@ -1076,7 +1128,7 @@ def launch_system_webview(
                       checks.noCommunityNavigation = !document.querySelector('[data-page="community"]');
                       document.getElementById('aboutButton').click();
                       checks.aboutOpen = !document.getElementById('aboutModal').classList.contains('hidden');
-                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.3');
+                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.4');
                       checks.aboutContact = document.getElementById('aboutModal').innerText.includes('QQ群：610645081');
                       checks.aboutIcon = (() => {
                         const icon = document.querySelector('#aboutButton .aboutIcon');
@@ -1122,6 +1174,19 @@ def launch_system_webview(
                         && !document.getElementById('openExport').disabled;
                       checks.partialSuccessCount = document.getElementById('successTotal').textContent === '29'
                         && document.getElementById('percent').textContent === '8%';
+                      showQueryResult({incomplete:false, completed:34, total:34, dataCount:29, noDataCount:5,
+                        rows:[{keyword:'供应链',date:'2026-09-12',province:'北京',city:'北京',overall:10,pc:0,mobile:10}],
+                        rowCount:899, outputs:['fixture.csv'],runDir:'/tmp/fixture'});
+                      checks.noDataCounts = document.getElementById('successTotal').textContent === '29'
+                        && document.getElementById('noDataTotal').textContent === '5'
+                        && document.getElementById('failureTotal').textContent === '0';
+                      checks.noDataCompletion = document.getElementById('percent').textContent === '100%'
+                        && document.getElementById('statusTitle').textContent === '查询完成'
+                        && document.getElementById('resultMeta').textContent.includes('无数据 5');
+                      checks.summaryFits = [...document.querySelectorAll('.summaryGrid article')].every(x => {
+                        const box = x.getBoundingClientRect();
+                        return [...x.querySelectorAll('small,b')].every(y => y.getBoundingClientRect().right <= box.right);
+                      });
                       resumeKey = queryKey(queryConfig()); updateSummary();
                       checks.resumeButton = document.getElementById('startBtn').textContent === '继续查询';
                       document.getElementById('interval').value = '10'; updateSummary();

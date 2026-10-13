@@ -113,13 +113,15 @@ def parse_search_payload(
     rows: List[IndexPoint] = []
     for item in indexes:
         if not isinstance(item, dict):
-            continue
+            raise ResponseFormatError("userIndexes 条目格式错误")
         if item.get("type", "day") not in (None, "day"):
             raise ResponseFormatError("服务端返回非日级采样（%s），请缩短查询时间范围" % item["type"])
         keyword = _word_name(item, fallback_keyword)
         all_info = _channel(item, "all", "_all")
         pc_info = _channel(item, "pc", "_pc")
         mobile_info = _channel(item, "wise", "mobile", "_wise")
+        if not any(isinstance(item.get(name), dict) for name in ("all", "_all", "pc", "_pc", "wise", "mobile", "_wise")):
+            raise ResponseFormatError("指数序列缺少通道字段")
         channels = []
         for info in (all_info, pc_info, mobile_info):
             encrypted = info.get("data", "") if isinstance(info, dict) else ""
@@ -190,6 +192,7 @@ class BaiduIndexClient:
         signature_provider: Optional[Callable[[], Any]] = None,
         user_agent: str = "",
         before_request: Optional[Callable[[str, Mapping[str, Any]], None]] = None,
+        on_no_data: Optional[Callable[[str, str, Region, str, str], None]] = None,
     ):
         cookie = (cookie or "").strip()
         if not cookie:
@@ -202,6 +205,7 @@ class BaiduIndexClient:
         self.cipher_text = (cipher_text or "").strip()
         self.signature_provider = signature_provider
         self.before_request = before_request
+        self.on_no_data = on_no_data
         self.headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9",
@@ -299,9 +303,15 @@ class BaiduIndexClient:
             for first, last in ranges:
                 try:
                     rows.extend(self.query_keyword(keyword, first, last, region))
+                except NoDataError:
+                    # A missing window is not a reason to discard earlier
+                    # windows or omit later dates from a long-range query.
+                    continue
                 except Exception as exc:
                     exc.partial_rows = rows + getattr(exc, "partial_rows", [])
                     raise
+            if not rows:
+                raise NoDataError("该条件没有指数数据")
             return rows
         params = {
             "area": str(region.area_id),
@@ -325,6 +335,10 @@ class BaiduIndexClient:
                 if not rows:
                     raise NoDataError("该条件没有指数数据")
                 return rows
+            except NoDataError:
+                if self.on_no_data:
+                    self.on_no_data("search", keyword, region, start_date, end_date)
+                raise
             except (AuthenticationError, RateLimitError):
                 raise
             except (NetworkError, HttpError) as exc:
@@ -352,9 +366,13 @@ class BaiduIndexClient:
             for first, last in ranges:
                 try:
                     rows.extend(self.query_news_keyword(keyword, first, last, region))
+                except NoDataError:
+                    continue
                 except Exception as exc:
                     exc.partial_rows = rows + getattr(exc, "partial_rows", [])
                     raise
+            if not rows:
+                raise NoDataError("该条件没有资讯指数数据")
             return rows
         params = {
             "area": str(region.area_id),
@@ -377,6 +395,10 @@ class BaiduIndexClient:
                 if not rows:
                     raise NoDataError("该条件没有资讯指数数据")
                 return rows
+            except NoDataError:
+                if self.on_no_data:
+                    self.on_no_data("news", keyword, region, start_date, end_date)
+                raise
             except (AuthenticationError, RateLimitError):
                 raise
             except (NetworkError, HttpError) as exc:

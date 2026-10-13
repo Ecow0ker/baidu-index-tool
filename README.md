@@ -1,6 +1,6 @@
 # 百度指数查询工具
 
-当前版本：`v2.4.3`
+当前版本：`v2.4.4`
 
 Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
@@ -17,6 +17,7 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 - 长日期范围按日级时间段查询，避免将服务端周级采样误标为逐日数据；年均值由日级数据计算。
 - 支持暂停、继续和停止查询。
 - 中断后保存已获取结果及查询进度；当前窗口支持继续未完成的任务。
+- 某个地区或日期段没有数据时记录该条件并继续；有数据、无数据和失败分别统计，缺失不会填成 0。
 - 自定义导出目录；缺失值显示为 `—`，数值零显示为 `0`。
 - Linux 命令行支持搜索指数查询、地区检索和已有 CSV 聚合转换。
 
@@ -26,10 +27,10 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 
 | 系统 | 处理器 | 文件 |
 |---|---|---|
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.3-windows-x64.exe` |
-| macOS | Intel | `baidu-index-tool-v2.4.3-macos-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.3-macos-arm64.zip` |
-| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.3-source.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.4-windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.4-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.4-macos-arm64.zip` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.4-source.zip` |
 
 Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
 
@@ -58,6 +59,7 @@ xattr -dr com.apple.quarantine /Applications/百度指数查询工具.app
 
 ## 查询报错时
 
+- 日志显示“无数据”表示服务端没有返回该条件的指数序列，不等于指数为 0。软件会继续后续任务，并在导出目录的 `查询进度.json` 中记录地区、指标及日期段；全部无数据时不生成虚假的数据 CSV。
 - Windows/macOS 的 HTTPS 使用系统证书信任库，证书和域名验证始终开启；不依赖构建电脑上的证书路径。
 - 若提示“HTTPS 证书验证失败”，检查系统日期；使用 HTTPS 代理时，其证书需要已受操作系统信任。此错误发生在接口请求阶段，不代表账号登录失效。
 - “已保存账号”表示本机有 Cookie 记录，不表示账号仍处于登录状态。若日志提示“登录信息未通过校验”，在软件内重新登录并同步 Cookie。

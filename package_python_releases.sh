@@ -2,7 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-VERSION=2.4.3
+VERSION=2.4.4
 RELEASE="$ROOT/release/v${VERSION}"
 
 MAC_X64_APP="$ROOT/dist/macos-x64/百度指数查询工具.app"
