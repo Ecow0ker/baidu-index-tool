@@ -17,7 +17,7 @@ from dataclasses import replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .aggregate import aggregate_brand_points, aggregate_points
-from .api import AuthenticationError, BaiduIndexClient, NoDataError, RateLimitError
+from .api import AuthenticationError, BaiduIndexClient, NoDataError, RateLimitError, RequestBlockedError
 from .export import write_brand_csv, write_csv, write_news_csv
 from .models import BrandIndexPoint, IndexPoint, Region
 from .regions import all_regions, resolve_region
@@ -25,7 +25,7 @@ from .task_logic import create_run_directory, output_filename, validate_task
 
 LOGIN_URL = "https://index.baidu.com/v2/index.html#/"
 APP_NAME = "百度指数查询工具"
-APP_VERSION = "2.4.1"
+APP_VERSION = "2.4.2"
 
 
 def _account_path() -> pathlib.Path:
@@ -97,6 +97,13 @@ class SystemWebViewApi:
         self._login_create_lock = threading.Lock()
         self._login_window_factory: Optional[Callable[[], Any]] = None
         self._shutting_down = False
+        self._last_request_at: Optional[float] = None
+        self._request_label = "查询"
+        self._task_rows: Dict[Tuple[int, str], List[Any]] = {}
+        self._completed_tasks: set[Tuple[int, str]] = set()
+        self._task_key = ""
+        self._run_directory: Optional[Tuple[pathlib.Path, str]] = None
+        self._brand_entities: Dict[str, Any] = {}
 
     def bind_windows(self, main_window, login_window, signature_window=None) -> None:
         self._main_window = main_window
@@ -436,6 +443,12 @@ class SystemWebViewApi:
             raise RuntimeError(detail)
 
     def _wait(self, seconds: float, label: str) -> None:
+        self._request_label = label
+        if self._cancel_event.is_set():
+            raise InterruptedError("任务已停止")
+        while self._pause_event.is_set():
+            if self._cancel_event.wait(0.1):
+                raise InterruptedError("任务已停止")
         duration = max(0.0, float(seconds))
         if not duration:
             self._emit("countdown", {"seconds": 0, "label": label})
@@ -465,7 +478,30 @@ class SystemWebViewApi:
         return {"seconds": float(seconds), "elapsed": time.monotonic() - started}
 
     def _client(self, cookie: str, interval: float) -> BaiduIndexClient:
-        return BaiduIndexClient(cookie, timeout=25, retries=2, retry_delay=max(2.0, interval), signature_provider=self._signature)
+        label = self._request_label
+
+        def before_request(path: str, params: Dict[str, Any]) -> None:
+            remaining = 0.0 if self._last_request_at is None else max(
+                0.0, interval - (time.monotonic() - self._last_request_at),
+            )
+            step = label + " · 解码参数" if "ptbk" in path else label
+            if params.get("startDate") and params.get("endDate"):
+                step += " · %s 至 %s" % (params["startDate"], params["endDate"])
+            self._wait(remaining, step)
+            self._last_request_at = time.monotonic()
+
+        return BaiduIndexClient(
+            cookie, timeout=25, retries=2, retry_delay=max(2.0, interval),
+            signature_provider=self._signature, before_request=before_request,
+        )
+
+    def _store_task_rows(self, key: Tuple[int, str], rows: Sequence[Any], complete: bool = False) -> None:
+        self._task_rows[key] = list(rows)
+        if complete:
+            self._completed_tasks.add(key)
+
+    def _emit_rows(self, name: str, rows: Sequence[Any]) -> None:
+        self._emit(name, {"rows": [_row_dict(item) for item in rows[-2000:]], "rowCount": len(rows)})
 
     @staticmethod
     def _account_order(count: int, task_index: int, strategy: str) -> List[int]:
@@ -477,16 +513,21 @@ class SystemWebViewApi:
         return [(start + offset) % count for offset in range(count)]
 
     def _query_search(self, config: Dict[str, Any], cookies: Sequence[str], regions: Sequence[Region]) -> List[IndexPoint]:
-        rows: List[IndexPoint] = []
+        rows: List[IndexPoint] = [
+            item for key, batch in self._task_rows.items() if key in self._completed_tasks for item in batch
+        ]
         keywords = config["keywords"]
         interval = float(config.get("interval") or 0)
         strategy = str(config.get("strategy") or "round_robin")
         channels = set(config.get("searchChannels") or [])
         include_news = "news" in channels
         total = max(1, len(keywords) * len(regions))
-        done = 0
+        done = len(self._completed_tasks)
         for region in regions:
             for keyword in keywords:
+                task_key = (region.area_id, keyword)
+                if task_key in self._completed_tasks:
+                    continue
                 last_error: Optional[Exception] = None
                 batch: List[IndexPoint] = []
                 account_index = 0
@@ -507,6 +548,15 @@ class SystemWebViewApi:
                             "detail": "正在尝试下一账号" if position + 1 < len(cookies) else "已尝试全部保存的账号",
                             "kind": "warn",
                         })
+                    except Exception as exc:
+                        partial = getattr(exc, "partial_rows", [])
+                        if partial:
+                            self._store_task_rows(task_key, [replace(
+                                item, overall=item.overall if "overall" in channels else None,
+                                pc=item.pc if "pc" in channels else None,
+                                mobile=item.mobile if "mobile" in channels else None,
+                            ) for item in partial])
+                        raise
                 else:
                     if last_error:
                         raise last_error
@@ -516,6 +566,7 @@ class SystemWebViewApi:
                     pc=item.pc if "pc" in channels else None,
                     mobile=item.mobile if "mobile" in channels else None,
                 ) for item in batch]
+                self._store_task_rows(task_key, batch)
                 if include_news:
                     label = "资讯指数 · %s · %s" % (keyword, region.display_name)
                     news = []
@@ -543,30 +594,40 @@ class SystemWebViewApi:
                                 "detail": "正在尝试下一账号" if position + 1 < len(order) else "已尝试全部保存的账号",
                                 "kind": "warn",
                             })
+                        except Exception as exc:
+                            news_by_date = {item.date: item.news for item in getattr(exc, "partial_rows", [])}
+                            self._store_task_rows(task_key, [replace(item, news=news_by_date.get(item.date)) for item in batch])
+                            raise
                     if last_news_error:
                         raise last_news_error
                     news_by_date = {item.date: item.news for item in news}
                     batch = [replace(item, news=news_by_date.get(item.date)) for item in batch]
+                self._store_task_rows(task_key, batch, complete=True)
                 rows.extend(batch)
                 done += 1
-                self._emit("batch", {"rows": [_row_dict(item) for item in batch]})
+                self._emit_rows("batch", batch)
                 self._emit("progress", {"done": done, "total": total, "label": "%s · %s" % (keyword, region.display_name)})
         return rows
 
     def _query_brand(self, config: Dict[str, Any], cookies: Sequence[str], regions: Sequence[Region]) -> List[BrandIndexPoint]:
-        rows: List[BrandIndexPoint] = []
+        rows: List[BrandIndexPoint] = [
+            item for key, batch in self._task_rows.items() if key in self._completed_tasks for item in batch
+        ]
         keywords = config["keywords"]
         interval = float(config.get("interval") or 0)
         strategy = str(config.get("strategy") or "round_robin")
         metrics = list(config.get("brandChannels") or [])
         labels = {"brand_index": "品牌指数", "brand_search": "品牌搜索指数", "brand_news": "品牌资讯指数", "brand_interaction": "品牌互动指数"}
         request_total = max(1, len(keywords) + len(keywords) * len(regions) * len(metrics))
-        request_done = 0
-        task_done = 0
-        entities = {}
+        request_done = len(self._brand_entities) + len(self._completed_tasks) * len(metrics)
+        task_done = len(self._completed_tasks)
+        entities = self._brand_entities
 
         for region in regions:
             for keyword_index, keyword in enumerate(keywords):
+                task_key = (region.area_id, keyword)
+                if task_key in self._completed_tasks:
+                    continue
                 # Resolve lazily so the first keyword starts streaming metric
                 # rows immediately; cache the entity for all later regions.
                 if keyword not in entities:
@@ -587,7 +648,7 @@ class SystemWebViewApi:
                             raise last_error
                         raise NoDataError("未匹配到品牌：%s" % keyword)
                     request_done += 1
-                    self._emit("progress", {"done": request_done, "total": request_total, "label": logical_label})
+                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), "label": logical_label})
                 entity = entities[keyword]
                 merged: Dict[str, BrandIndexPoint] = {}
                 for metric_index, metric in enumerate(metrics):
@@ -628,16 +689,21 @@ class SystemWebViewApi:
                             )
                     request_done += 1
                     partial = [merged[key] for key in sorted(merged)]
-                    self._emit("snapshot", {"rows": [_row_dict(item) for item in rows + partial]})
-                    self._emit("progress", {"done": request_done, "total": request_total, "label": label})
+                    self._store_task_rows(task_key, partial)
+                    self._emit_rows("snapshot", rows + partial)
+                    self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), "label": label})
                 batch = [merged[key] for key in sorted(merged)]
+                self._store_task_rows(task_key, batch, complete=True)
                 rows.extend(batch)
                 task_done += 1
+                self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": task_done, "label": label})
         return rows
 
     def _export(self, rows: Sequence[IndexPoint | BrandIndexPoint], config: Dict[str, Any]) -> Tuple[List[str], str]:
         output_root = pathlib.Path(config.get("outputDir") or pathlib.Path.home() / "Downloads" / "百度指数数据").expanduser()
-        run_dir, stamp = create_run_directory(output_root)
+        if self._run_directory is None:
+            self._run_directory = create_run_directory(output_root)
+        run_dir, stamp = self._run_directory
         period = str(config.get("period") or "daily")
         start_date, end_date = config["startDate"], config["endDate"]
         index_mode = config.get("indexMode") or "search"
@@ -655,6 +721,62 @@ class SystemWebViewApi:
             path = run_dir / output_filename("all", stamp, period, start_date, end_date, kind="news")
             outputs.append(str(write_news_csv(aggregated, path)))
         return outputs, str(run_dir)
+
+    def _query_result(self, config: Dict[str, Any], error: Optional[Exception] = None) -> Dict[str, Any]:
+        rows = [item for batch in self._task_rows.values() for item in batch]
+        incomplete = error is not None
+        cancelled = isinstance(error, InterruptedError)
+        blocked = isinstance(error, RequestBlockedError)
+        total = len(config["keywords"]) * len(config["regionIds"])
+        outputs: List[str] = []
+        run_dir = ""
+        checkpoint = ""
+        message = str(error) if error else ""
+        if blocked:
+            message += "；请稍后在软件内确认网页查询正常，再继续查询"
+        if isinstance(error, AuthenticationError):
+            message = "登录信息未通过校验，请在软件内重新登录并同步 Cookie"
+        try:
+            if rows:
+                outputs, run_dir = self._export(rows, config)
+            if incomplete:
+                if self._run_directory is None:
+                    output_root = pathlib.Path(config.get("outputDir") or pathlib.Path.home() / "Downloads" / "百度指数数据")
+                    self._run_directory = create_run_directory(output_root)
+                run_dir = str(self._run_directory[0])
+                path = self._run_directory[0] / "查询进度.json"
+                # Save raw daily values so aggregated CSVs are not used as a
+                # resume source. Credentials are excluded from this document.
+                document = {
+                    "config": {key: config[key] for key in (
+                        "keywords", "regionIds", "startDate", "endDate", "period", "indexMode",
+                        "searchChannels", "brandChannels", "interval", "outputDir",
+                    ) if key in config},
+                    "completedTasks": [list(key) for key in sorted(self._completed_tasks)],
+                    "batches": [{"areaId": key[0], "keyword": key[1], "rows": [_row_dict(item) for item in batch]}
+                                for key, batch in self._task_rows.items()],
+                    "error": message,
+                }
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+                temporary.replace(path)
+                checkpoint = str(path)
+            elif self._run_directory:
+                # A completed resume replaces the interrupted marker with its
+                # final completion state; it must not remain a stale checkpoint.
+                path = self._run_directory[0] / "查询进度.json"
+                if path.exists():
+                    path.write_text(json.dumps({"complete": True, "completed": total}, ensure_ascii=False), encoding="utf-8")
+        except (OSError, ValueError) as exc:
+            incomplete = True
+            message = (message + "；" if message else "") + "保存结果失败：%s" % exc
+        return {
+            "cancelled": cancelled, "blocked": blocked, "incomplete": incomplete,
+            "canResume": incomplete and len(self._completed_tasks) < total,
+            "message": message, "completed": len(self._completed_tasks), "total": total,
+            "rows": [_row_dict(item) for item in rows[-2000:]], "rowCount": len(rows), "outputs": outputs,
+            "runDir": run_dir, "checkpoint": checkpoint,
+        }
 
     def query(self, config: Dict[str, Any]) -> Dict[str, Any]:
         self._cancel_event.clear()
@@ -677,6 +799,8 @@ class SystemWebViewApi:
         index_mode = "brand" if config.get("indexMode") == "brand" else "search"
         config = dict(config)
         config["keywords"] = keywords
+        config["regionIds"] = [region.area_id for region in regions]
+        config["indexMode"] = index_mode
         config["strategy"] = document["strategy"]
         channels = config.get("brandChannels") if index_mode == "brand" else config.get("searchChannels")
         validate_task(
@@ -684,18 +808,30 @@ class SystemWebViewApi:
             has_cookie=bool(cookies), has_channel=bool(channels),
             include_news="news" in (channels or []),
         )
+        task_key = json.dumps({key: config.get(key) for key in (
+            "keywords", "regionIds", "startDate", "endDate", "period", "indexMode",
+            "searchChannels", "brandChannels", "outputDir",
+        )}, sort_keys=True, ensure_ascii=False)
+        resumed = bool(config.get("resume") and task_key == self._task_key)
+        if not resumed:
+            self._task_rows = {}
+            self._completed_tasks = set()
+            self._brand_entities = {}
+            self._run_directory = None
+        self._task_key = task_key
+        if resumed:
+            self._emit_rows("snapshot", [item for key, batch in self._task_rows.items()
+                                         if key in self._completed_tasks for item in batch])
+        self._emit("progress", {"done": len(self._completed_tasks), "total": len(keywords) * len(regions),
+                                "completedTasks": len(self._completed_tasks), "label": "任务已恢复" if resumed else "任务已创建"})
         try:
-            rows = self._query_brand(config, cookies, regions) if index_mode == "brand" else self._query_search(config, cookies, regions)
-            outputs, run_dir = self._export(rows, config)
-            result_rows = [_row_dict(item) for item in rows]
-            return {"cancelled": False, "rows": result_rows, "outputs": outputs, "runDir": run_dir}
-        except AuthenticationError as exc:
-            raise RuntimeError(
-                "账号 Cookie 未通过查询接口校验；请打开“账号登录与 Cookie”，"
-                "在软件内登录窗口完成登录后点击“同步 Cookie”"
-            ) from exc
-        except InterruptedError:
-            return {"cancelled": True, "rows": [], "outputs": [], "runDir": ""}
+            if index_mode == "brand":
+                self._query_brand(config, cookies, regions)
+            else:
+                self._query_search(config, cookies, regions)
+        except Exception as exc:
+            return self._query_result(config, exc)
+        return self._query_result(config)
 
     def cancel(self) -> Dict[str, Any]:
         self._cancel_event.set()
@@ -882,7 +1018,7 @@ def launch_system_webview(
                       checks.noCommunityNavigation = !document.querySelector('[data-page="community"]');
                       document.getElementById('aboutButton').click();
                       checks.aboutOpen = !document.getElementById('aboutModal').classList.contains('hidden');
-                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.1');
+                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.2');
                       checks.aboutContact = document.getElementById('aboutModal').innerText.includes('QQ群：610645081');
                       checks.aboutIcon = (() => {
                         const icon = document.querySelector('#aboutButton .aboutIcon');
@@ -920,6 +1056,21 @@ def launch_system_webview(
                       checks.reset = document.getElementById('keywords').value === '华为' && document.getElementById('interval').value === '4';
                       checks.outputDirectory = Boolean(document.getElementById('outputDir').value);
                       checks.queryControls = document.getElementById('pauseBtn').disabled && document.getElementById('stopBtn').disabled;
+                      showQueryResult({blocked:true, incomplete:true, cancelled:false, completed:29, total:362,
+                        rows:[{keyword:'供应链',date:'2011-01-01',province:'北京',city:'北京',overall:10,pc:10,mobile:0}],
+                        outputs:['fixture.csv'],runDir:'/tmp/fixture',message:'请求被服务端拦截（10001: request block）'});
+                      checks.blockedResultSaved = document.getElementById('statusTitle').textContent === '请求被拦截'
+                        && document.getElementById('resultMeta').textContent.includes('29/362')
+                        && !document.getElementById('openExport').disabled;
+                      checks.partialSuccessCount = document.getElementById('successTotal').textContent === '29'
+                        && document.getElementById('percent').textContent === '8%';
+                      resumeKey = queryKey(queryConfig()); updateSummary();
+                      checks.resumeButton = document.getElementById('startBtn').textContent === '继续查询';
+                      document.getElementById('interval').value = '10'; updateSummary();
+                      checks.resumeAfterIntervalChange = document.getElementById('startBtn').textContent === '继续查询';
+                      document.getElementById('keywords').value = '测试新任务'; updateCounts();
+                      checks.changedTaskStartsFresh = document.getElementById('startBtn').textContent === '开始查询';
+                      document.getElementById('resetConfig').click();
                       return JSON.stringify({allPass: Object.values(checks).every(Boolean), minimumFont: effectiveMinimumFont, rawMinimumFont, devicePixelRatio, checks});
                     })()
                     """)

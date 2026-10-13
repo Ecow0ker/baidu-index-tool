@@ -43,9 +43,9 @@ jobs:
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/macos-${{ matrix.arch }}/百度指数查询工具.app" \
-            "baidu-index-tool-v2.4.1-macos-${{ matrix.arch }}.zip"
+            "baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v7
         with:
-          name: baidu-index-tool-v2.4.1-macos-${{ matrix.arch }}
-          path: baidu-index-tool-v2.4.1-macos-${{ matrix.arch }}.zip
+          name: baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}
+          path: baidu-index-tool-v2.4.2-macos-${{ matrix.arch }}.zip
           if-no-files-found: error

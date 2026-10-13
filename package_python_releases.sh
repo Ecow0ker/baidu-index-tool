@@ -2,8 +2,8 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-RELEASE="$ROOT/release"
-VERSION=2.4.1
+VERSION=2.4.2
+RELEASE="$ROOT/release/v${VERSION}"
 
 MAC_X64_APP="$ROOT/dist/macos-x64/百度指数查询工具.app"
 MAC_ARM64_APP="$ROOT/dist/macos-arm64/百度指数查询工具.app"
@@ -27,15 +27,6 @@ codesign --verify --deep --strict "$MAC_X64_APP"
 codesign --verify --deep --strict "$MAC_ARM64_APP"
 [ "$(lipo -archs "$MAC_X64_APP/Contents/MacOS/百度指数查询工具")" = "x86_64" ]
 [ "$(lipo -archs "$MAC_ARM64_APP/Contents/MacOS/百度指数查询工具")" = "arm64" ]
-
-python3 - "$RELEASE" <<'PY'
-from pathlib import Path
-import shutil, sys
-release = Path(sys.argv[1])
-for path in release.iterdir():
-    if path.is_dir(): shutil.rmtree(path)
-    else: path.unlink()
-PY
 
 ditto -c -k --sequesterRsrc --keepParent "$MAC_X64_APP" "$MAC_X64_ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$MAC_ARM64_APP" "$MAC_ARM64_ZIP"

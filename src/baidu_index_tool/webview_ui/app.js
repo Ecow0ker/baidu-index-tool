@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id);
-let indexMode='search', regions=[], lastRunDir='', running=false, paused=false, completedRows=0, demoMode=false;
+let indexMode='search', regions=[], lastRunDir='', running=false, paused=false, completedRows=0, demoMode=false, resumeKey='';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iso=date=>{const copy=new Date(date.getTime()-date.getTimezoneOffset()*60000);return copy.toISOString().slice(0,10)};
 const clock=()=>new Date().toLocaleTimeString('zh-CN',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -10,12 +10,15 @@ function api(){return window.pywebview.api}
 function keywords(){return $('keywords').value.split(/\r?\n/).map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i)}
 function selectedIds(){return [...document.querySelectorAll('.regionCheck:checked')].map(x=>Number(x.value))}
 function selectedChannels(group){return [...document.querySelectorAll(`#${group} input:checked`)].map(x=>x.value)}
-function requestCount(){const tasks=Math.max(1,keywords().length)*Math.max(1,selectedIds().length);return indexMode==='brand'?Math.max(1,keywords().length)+tasks*selectedChannels('brandChannels').length:tasks*(1+(selectedChannels('searchChannels').includes('news')?1:0))}
+function requestCount(){const tasks=Math.max(1,keywords().length)*Math.max(1,selectedIds().length);const days=Math.max(1,Math.round((new Date($('endDate').value+'T00:00:00Z')-new Date($('startDate').value+'T00:00:00Z'))/86400000)+1)||1;return indexMode==='brand'?Math.max(1,keywords().length)+tasks*selectedChannels('brandChannels').length:2*Math.ceil(days/365)*tasks*(1+(selectedChannels('searchChannels').includes('news')?1:0))}
+function queryConfig(){return {keywords:keywords(),regionIds:selectedIds(),startDate:$('startDate').value,endDate:$('endDate').value,period:$('period').value,interval:Number($('interval').value||0),outputDir:$('outputDir').value,indexMode,searchChannels:selectedChannels('searchChannels'),brandChannels:selectedChannels('brandChannels')}}
+function queryKey(config){const {interval,resume,...fields}=config;return JSON.stringify(fields)}
 function updateSummary(){
   const tasks=keywords().length*selectedIds().length;
   $('taskTotal').textContent=String(tasks);
   const seconds=Math.max(0,Number($('interval').value||0))*requestCount();
   $('estimatedTime').textContent=seconds<60?`${seconds} 秒`:`约 ${Math.ceil(seconds/60)} 分钟`;
+  if(!running)$('startBtn').textContent=resumeKey&&resumeKey===queryKey(queryConfig())?'继续查询':'开始查询';
 }
 function updateCounts(){
   $('keywordCount').textContent=`${keywords().length} 个`;
@@ -43,10 +46,11 @@ function rowHtml(row){
   const values=indexMode==='brand'?[row.keyword,row.date,row.province,row.city,row.brand_index,row.brand_search,row.brand_news,row.brand_interaction]:[row.keyword,row.date,row.province,row.city,row.overall,row.pc,row.mobile,row.news];
   return `<tr>${values.map((x,i)=>cell(x,i>=4)).join('')}</tr>`;
 }
-function setRows(rows,replace=true){
-  const html=rows.map(rowHtml).join('');
+function setRows(rows,replace=true,totalRows=null){
+  const html=rows.slice(-2000).map(rowHtml).join('');
   if(replace)$('tableBody').innerHTML=html||'<tr><td colspan="8" class="empty"><span class="emptyIcon">⌕</span><b>当前指标没有数据</b><small>继续检查下一项指标</small></td></tr>';else $('tableBody').insertAdjacentHTML('beforeend',html);
-  completedRows=replace?rows.length:completedRows+rows.length;$('rowCount').textContent=`共 ${completedRows} 条`;
+  while($('tableBody').children.length>2000)$('tableBody').firstElementChild.remove();
+  completedRows=replace?(totalRows??rows.length):completedRows+(totalRows??rows.length);$('rowCount').textContent=`共 ${completedRows} 条${completedRows>2000?' · 显示最近 2000 条':''}`;
 }
 function addLog(title,detail='',kind='info'){
   const item=document.createElement('article');item.className=`logItem ${kind}`;
@@ -60,6 +64,21 @@ function setAccounts(value){
   $('accountCount').textContent=`已保存 ${value.count||0} 个账号`;
   $('accountState').innerHTML=`<i></i>${value.count?`已保存账号 · ${value.count}`:'未保存账号'}`;$('accountState').classList.toggle('connected',Boolean(value.count));
 }
+function showQueryResult(result){
+  const rowTotal=result.rowCount??result.rows.length;
+  setRows(result.rows,true,rowTotal);lastRunDir=result.runDir||'';$('openExport').disabled=!lastRunDir;
+  const done=result.completed||0,total=result.total||1,p=Math.round(done/total*100);
+  $('bar').style.width=`${p}%`;$('percent').textContent=`${p}%`;$('successTotal').textContent=String(done);
+  $('failureTotal').textContent=result.incomplete&&!result.cancelled?'1':'0';
+  if(result.incomplete){
+    const title=result.blocked?'请求被拦截':result.cancelled?'任务已停止':'查询中断';
+    const saved=`已完成 ${done}/${total} 个任务 · 已保留 ${rowTotal} 行 · ${result.outputs.length} 个文件`;
+    updateStatus(title,result.message||saved);$('resultMeta').textContent=saved;
+    addLog(title,result.message||'',result.cancelled?'warn':'error');addLog('当前结果已保留',saved,'info');
+  }else{
+    updateStatus('查询完成',`${rowTotal} 行数据 · ${result.outputs.length} 个文件`);$('resultMeta').textContent=`完成 · ${rowTotal} 条结果`;addLog('查询与导出完成',`${rowTotal} 行 · ${result.outputs.length} 个文件`,'success');
+  }
+}
 async function syncCookies(){
   const button=$('syncCookies');button.disabled=true;$('syncState').textContent='正在提取 Cookie…';
   try{const value=await api().sync_login_cookies();setAccounts({...value,strategy:value.strategy||$('strategy').value});$('syncState').textContent=value.detected?'✓ Cookie 已提取并保存':(value.message||'尚未检测到登录 Cookie');}
@@ -67,14 +86,14 @@ async function syncCookies(){
   finally{button.disabled=false}
 }
 async function startQuery(){
-  const config={keywords:keywords(),regionIds:selectedIds(),startDate:$('startDate').value,endDate:$('endDate').value,period:$('period').value,interval:Number($('interval').value||0),outputDir:$('outputDir').value,indexMode,searchChannels:selectedChannels('searchChannels'),brandChannels:selectedChannels('brandChannels')};
-  $('tableBody').innerHTML='';completedRows=0;$('rowCount').textContent='共 0 条';setRunning(true);$('openExport').disabled=true;$('bar').style.width='0';$('percent').textContent='0%';$('successTotal').textContent='0';$('failureTotal').textContent='0';$('countdownValue').textContent='—';updateStatus('正在创建任务','校验关键词、地区、日期与账号状态');addLog('任务已创建',`${config.keywords.length} 个关键词 · ${config.regionIds.length} 个地区`);
+  const config=queryConfig(),key=queryKey(config);config.resume=Boolean(resumeKey&&resumeKey===key);
+  if(!config.resume){resumeKey='';$('tableBody').innerHTML='';completedRows=0;$('rowCount').textContent='共 0 条';$('bar').style.width='0';$('percent').textContent='0%';$('successTotal').textContent='0'}
+  setRunning(true);$('openExport').disabled=true;$('failureTotal').textContent='0';$('countdownValue').textContent='—';updateStatus(config.resume?'正在继续任务':'正在创建任务','校验关键词、地区、日期与账号状态');addLog(config.resume?'继续未完成的任务':'任务已创建',`${config.keywords.length} 个关键词 · ${config.regionIds.length} 个地区`);
   try{
     const result=await api().query(config);
-    if(result.cancelled){updateStatus('任务已停止','已保留当前显示结果');addLog('任务已停止','用户终止查询','warn');return}
-    setRows(result.rows);lastRunDir=result.runDir||'';$('openExport').disabled=!lastRunDir;$('bar').style.width='100%';$('percent').textContent='100%';$('successTotal').textContent=String($('taskTotal').textContent||1);updateStatus('查询完成',`${result.rows.length} 行数据 · ${result.outputs.length} 个文件`);$('resultMeta').textContent=`完成 · ${result.rows.length} 条结果`;addLog('查询与导出完成',`${result.rows.length} 行 · ${result.outputs.length} 个文件`,'success');
+    resumeKey=result.canResume?key:'';showQueryResult(result);
   }catch(error){$('failureTotal').textContent='1';updateStatus('查询失败',String(error));addLog('查询失败',String(error),'error')}
-  finally{setRunning(false);$('countdownBadge').classList.remove('active');$('countdownValue').textContent='—'}
+  finally{setRunning(false);updateSummary();$('openExport').disabled=!lastRunDir;$('countdownBadge').classList.remove('active');$('countdownValue').textContent='—'}
 }
 window.__pythonEvent=(name,data)=>{
   if(name==='countdown'){
@@ -82,9 +101,9 @@ window.__pythonEvent=(name,data)=>{
     updateStatus(data.seconds?`距下次请求 ${data.seconds} 秒`:'正在发送请求',data.label);
     if(data.seconds===Number($('interval').value||0)||data.seconds===0)addLog(data.seconds?`等待 ${data.seconds} 秒`:'开始发送请求',data.label);
   }
-  if(name==='progress'){const p=Math.round(data.done/data.total*100);$('bar').style.width=`${p}%`;$('percent').textContent=`${p}%`;$('resultMeta').textContent=`进行中 · ${data.done}/${data.total} 个请求`}
-  if(name==='batch')setRows(data.rows,false);
-  if(name==='snapshot')setRows(data.rows,true);
+  if(name==='progress'){const p=Math.round(data.done/data.total*100);$('bar').style.width=`${p}%`;$('percent').textContent=`${p}%`;$('successTotal').textContent=String(data.completedTasks??(indexMode==='search'?data.done:0));$('resultMeta').textContent=`进行中 · ${data.done}/${data.total} 个请求`}
+  if(name==='batch')setRows(data.rows,false,data.rowCount??null);
+  if(name==='snapshot')setRows(data.rows,true,data.rowCount??null);
   if(name==='log'){updateStatus(data.text,data.detail||data.text);addLog(data.text,data.detail||'',data.kind||'info')}
 };
 
@@ -94,7 +113,7 @@ $('regionSearch').oninput=event=>{const needle=event.target.value.trim().toLower
 $('selectProvinces').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(box=>{const r=regions.find(x=>Number(x.area_id)===Number(box.value));box.checked=Boolean(r&&r.kind==='province')});updateCounts()};
 $('selectCities').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(box=>{const r=regions.find(x=>Number(x.area_id)===Number(box.value));box.checked=Boolean(r&&r.kind==='city')});updateCounts()};
 $('clearRegions').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(x=>x.checked=false);updateCounts()};
-$('resetConfig').onclick=()=>{$('keywords').value='华为';$('interval').value='4';switchMode('search');document.querySelectorAll('.regionCheck').forEach((x,i)=>x.checked=i===0);updateCounts();addLog('已恢复默认配置')};
+$('resetConfig').onclick=()=>{resumeKey='';$('keywords').value='华为';$('interval').value='4';switchMode('search');document.querySelectorAll('.regionCheck').forEach((x,i)=>x.checked=i===0);updateCounts();addLog('已恢复默认配置')};
 function openAccounts(){$('accountModal').classList.remove('hidden')}
 function openAbout(){$('aboutModal').classList.remove('hidden')}
 $('loginBtn').onclick=openAccounts;$('closeModal').onclick=()=>$('accountModal').classList.add('hidden');

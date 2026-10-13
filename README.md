@@ -1,6 +1,6 @@
 # 百度指数查询工具
 
-当前版本：`v2.4.1`
+当前版本：`v2.4.2`
 
 Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
@@ -14,7 +14,9 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 - 在软件内完成百度账号登录并同步 Cookie。
 - 保存多个账号，支持顺序轮换或随机切换。
 - 设置请求间隔，并显示倒计时、任务进度和运行日志。
+- 长日期范围按日级时间段查询，避免将服务端周级采样误标为逐日数据；年均值由日级数据计算。
 - 支持暂停、继续和停止查询。
+- 中断后保存已获取结果及查询进度；当前窗口支持继续未完成的任务。
 - 自定义导出目录；缺失值显示为 `—`，数值零显示为 `0`。
 - Linux 命令行支持搜索指数查询、地区检索和已有 CSV 聚合转换。
 
@@ -24,12 +26,18 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 
 | 系统 | 处理器 | 文件 |
 |---|---|---|
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.1-windows-x64.exe` |
-| macOS | Intel | `baidu-index-tool-v2.4.1-macos-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.1-macos-arm64.zip` |
-| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.1-source.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.2-windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.2-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.2-macos-arm64.zip` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.2-source.zip` |
 
 Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
+
+若日志显示 `10001: request block`，表示服务端拦截了当前请求。软件会保存已获取的结果并停止发送后续请求。请稍后在软件内确认网页查询恢复正常，再点击“继续查询”；可增加请求间隔。已保存账号数量不代表这些账号的 Cookie 均有效。
+
+请求间隔覆盖趋势接口、解码参数接口及重试。跨多年的查询包含多个时间段，实际请求数会多于地区数量，预计耗时随日期范围增加。
+
+表格显示最近 2,000 条记录，CSV 文件保存全部结果。
 
 macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也可执行：
 

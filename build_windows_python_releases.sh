@@ -8,7 +8,7 @@ BUILD="$ROOT/.windows-python-build"
 LAUNCHER="$ROOT/windows_python_launcher"
 PYTHON=${PYTHON:-python3}
 PYTHON_VERSION=3.12.10
-VERSION=2.4.1
+VERSION=2.4.2
 OUTPUT="$ROOT/dist/baidu-index-tool-v${VERSION}-windows-x64.exe"
 mkdir -p "$CACHE" "$WEB_CACHE" "$BUILD" "$ROOT/dist"
 

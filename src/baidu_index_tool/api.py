@@ -36,6 +36,10 @@ class RateLimitError(ApiError):
     pass
 
 
+class RequestBlockedError(ApiError):
+    """A server-side block applies to the request, not a verified account fault."""
+
+
 class NoDataError(ApiError):
     pass
 
@@ -70,6 +74,14 @@ def _dates(start_date: str, count: int) -> List[str]:
     return [(start + dt.timedelta(days=i)).isoformat() for i in range(count)]
 
 
+def _daily_ranges(start_date: str, end_date: str):
+    start, end = parse_date(start_date), parse_date(end_date)
+    while start <= end:
+        last = min(end, start + dt.timedelta(days=364))
+        yield start.isoformat(), last.isoformat()
+        start = last + dt.timedelta(days=1)
+
+
 def _word_name(item: Mapping[str, Any], fallback: str) -> str:
     word = item.get("word")
     if isinstance(word, list) and word and isinstance(word[0], dict):
@@ -102,6 +114,8 @@ def parse_search_payload(
     for item in indexes:
         if not isinstance(item, dict):
             continue
+        if item.get("type", "day") not in (None, "day"):
+            raise ResponseFormatError("服务端返回非日级采样（%s），请缩短查询时间范围" % item["type"])
         keyword = _word_name(item, fallback_keyword)
         all_info = _channel(item, "all", "_all")
         pc_info = _channel(item, "pc", "_pc")
@@ -140,6 +154,8 @@ def parse_news_payload(
     for item in indexes:
         if not isinstance(item, dict):
             continue
+        if item.get("type", "day") not in (None, "day"):
+            raise ResponseFormatError("资讯接口返回非日级采样（%s），请缩短查询时间范围" % item["type"])
         key = item.get("key")
         if isinstance(key, list) and key and isinstance(key[0], dict):
             keyword = str(key[0].get("name") or fallback_keyword)
@@ -173,6 +189,7 @@ class BaiduIndexClient:
         cipher_text: str = "",
         signature_provider: Optional[Callable[[], Any]] = None,
         user_agent: str = "",
+        before_request: Optional[Callable[[str, Mapping[str, Any]], None]] = None,
     ):
         cookie = (cookie or "").strip()
         if not cookie:
@@ -184,6 +201,7 @@ class BaiduIndexClient:
         self.base_url = base_url.rstrip("/")
         self.cipher_text = (cipher_text or "").strip()
         self.signature_provider = signature_provider
+        self.before_request = before_request
         self.headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9",
@@ -212,6 +230,8 @@ class BaiduIndexClient:
                     signature = generated
             if signature:
                 headers["Cipher-Text"] = str(signature)
+        if self.before_request:
+            self.before_request(path, params)
         return self.transport.get_json(self.base_url + path, params, headers)
 
     def _post(self, path: str, body: Mapping[str, Any]) -> Dict[str, Any]:
@@ -221,6 +241,8 @@ class BaiduIndexClient:
         post_json = getattr(self.transport, "post_json", None)
         if not callable(post_json):
             raise NetworkError("当前传输层缺少 JSON POST 支持")
+        if self.before_request:
+            self.before_request(path, body)
         return post_json(self.base_url + path, body, headers)
 
     @staticmethod
@@ -229,6 +251,8 @@ class BaiduIndexClient:
         message = str(response.get("message") or "")
         if status in (0, "0"):
             return
+        if "request block" in " ".join(message.lower().split()):
+            raise RequestBlockedError("请求被服务端拦截（%s: %s）" % (status, message))
         if status in STATUS_NOT_LOGGED_IN or "未登录" in message or "no login" in message.lower():
             raise AuthenticationError("Cookie 已失效或账号未登录")
         if status in STATUS_RATE_LIMIT or any(
@@ -251,7 +275,7 @@ class BaiduIndexClient:
                 if isinstance(value, str) and value:
                     return value
                 last_error = ResponseFormatError("ptbk 返回值为空")
-            except (AuthenticationError, RateLimitError):
+            except (AuthenticationError, RateLimitError, RequestBlockedError):
                 raise
             except (ApiError, HttpError, NetworkError) as exc:
                 last_error = exc
@@ -269,6 +293,16 @@ class BaiduIndexClient:
             raise ValueError("关键词为空")
         validate_date_range(start_date, end_date)
         region = resolve_region(area)
+        ranges = list(_daily_ranges(start_date, end_date))
+        if len(ranges) > 1:
+            rows: List[IndexPoint] = []
+            for first, last in ranges:
+                try:
+                    rows.extend(self.query_keyword(keyword, first, last, region))
+                except Exception as exc:
+                    exc.partial_rows = rows + getattr(exc, "partial_rows", [])
+                    raise
+            return rows
         params = {
             "area": str(region.area_id),
             "word": json.dumps([[{"name": keyword, "wordType": 1}]], ensure_ascii=False, separators=(",", ":")),
@@ -312,6 +346,16 @@ class BaiduIndexClient:
             raise ValueError("关键词为空")
         validate_date_range(start_date, end_date)
         region = resolve_region(area)
+        ranges = list(_daily_ranges(start_date, end_date))
+        if len(ranges) > 1:
+            rows: List[IndexPoint] = []
+            for first, last in ranges:
+                try:
+                    rows.extend(self.query_news_keyword(keyword, first, last, region))
+                except Exception as exc:
+                    exc.partial_rows = rows + getattr(exc, "partial_rows", [])
+                    raise
+            return rows
         params = {
             "area": str(region.area_id),
             "word": json.dumps([[{"name": keyword, "wordType": 1}]], ensure_ascii=False, separators=(",", ":")),
