@@ -2,7 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-VERSION=2.4.4
+VERSION=2.4.5
 RELEASE="$ROOT/release/v${VERSION}"
 
 MAC_X64_APP="$ROOT/dist/macos-x64/百度指数查询工具.app"
@@ -38,7 +38,7 @@ import sys, zipfile
 
 root, target, version = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 top_files = [
-    ".gitignore", ".github/workflows/build-macos.yml", ".github/workflows/build-windows.yml", "AGENTS.md",
+    ".gitignore", ".github/workflows/test-linux.yml", ".github/workflows/build-macos.yml", ".github/workflows/build-windows.yml", "AGENTS.md",
     "Linux_命令行.sh", "README.md", "REVERSE_ENGINEERING.md",
     "Windows_启动图形界面.bat", "Windows_启动图形界面.pyw",
     "build_macos.sh", "build_windows.ps1", "build_windows_python_releases.sh",
@@ -50,7 +50,7 @@ for directory in ("assets", "src", "tests", "windows_python_launcher"):
     paths.extend(path for path in (root / directory).rglob("*") if path.is_file())
 
 def wanted(path: Path) -> bool:
-    return path.is_file() and path.name != ".DS_Store" and path.suffix not in {".pyc", ".pyo"} and "__pycache__" not in path.parts
+    return path.is_file() and path.name != ".DS_Store" and path.suffix not in {".pyc", ".pyo"} and "__pycache__" not in path.parts and not any(part.endswith(".egg-info") for part in path.parts)
 
 paths = sorted({path for path in paths if wanted(path)}, key=lambda p: p.relative_to(root).as_posix())
 github_root = f"baidu-index-tool-v{version}"

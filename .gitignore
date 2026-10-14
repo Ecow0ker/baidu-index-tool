@@ -18,3 +18,5 @@ release/*.exe
 release/*.zip
 release/**/*.exe
 release/**/*.zip
+
+*.egg-info/

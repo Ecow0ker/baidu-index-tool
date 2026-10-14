@@ -23,10 +23,11 @@ from .export import write_brand_csv, write_csv, write_news_csv
 from .models import BrandIndexPoint, IndexPoint, Region
 from .regions import all_regions, resolve_region
 from .task_logic import create_run_directory, output_filename, validate_task
+from .reverse_contract import PERIOD_LABELS
 
 LOGIN_URL = "https://index.baidu.com/v2/index.html#/"
 APP_NAME = "百度指数查询工具"
-APP_VERSION = "2.4.4"
+APP_VERSION = "2.4.5"
 
 
 def _account_path() -> pathlib.Path:
@@ -149,8 +150,16 @@ class SystemWebViewApi:
             window = self._login_window_factory()
             if window is not None:
                 with self._login_window_lock:
-                    self._login_window = window
-                    self._signature_window = window
+                    closing = self._shutting_down
+                    if not closing:
+                        self._login_window = window
+                        self._signature_window = window
+                if closing:
+                    try:
+                        window.destroy()
+                    except Exception:
+                        pass
+                    return None
             return window
 
     @staticmethod
@@ -164,7 +173,10 @@ class SystemWebViewApi:
             return False
 
     def shutdown(self) -> None:
-        self._shutting_down = True
+        with self._login_window_lock:
+            self._shutting_down = True
+        self._cancel_event.set()
+        self._pause_event.clear()
         window = self._current_login_window()
         if window is None:
             return
@@ -506,6 +518,7 @@ class SystemWebViewApi:
             records.append(detail)
             label = {"search": "搜索指数", "news": "资讯指数", "selected": "所选指标",
                      "brand_index": "品牌指数", "brand_search": "品牌搜索指数",
+                     "brand_match": "品牌匹配",
                      "brand_news": "品牌资讯指数", "brand_interaction": "品牌互动指数"}.get(metric, metric)
             self._emit("log", {"text": "无数据 · %s · %s" % (keyword, region.display_name),
                                "detail": "%s · %s 至 %s；缺失不按 0 处理" % (label, start, end), "kind": "warn"})
@@ -683,6 +696,9 @@ class SystemWebViewApi:
                         try:
                             entities[keyword] = self._client(cookies[index], interval).resolve_brand(keyword)
                             break
+                        except NoDataError:
+                            entities[keyword] = None
+                            break
                         except (AuthenticationError, RateLimitError) as exc:
                             last_error = exc
                     else:
@@ -692,6 +708,15 @@ class SystemWebViewApi:
                     request_done += 1
                     self._emit("progress", {"done": request_done, "total": request_total, "completedTasks": len(self._completed_tasks), **self._task_counts(), "label": logical_label})
                 entity = entities[keyword]
+                if entity is None:
+                    self._record_no_data("brand_match", keyword, region, config["startDate"], config["endDate"])
+                    self._store_task_rows(task_key, [], complete=True)
+                    request_done += len(metrics)
+                    task_done += 1
+                    self._emit("progress", {"done": request_done, "total": request_total,
+                                            "completedTasks": task_done, **self._task_counts(),
+                                            "label": "未匹配到品牌 · %s" % keyword})
+                    continue
                 merged: Dict[str, BrandIndexPoint] = {}
                 for metric_index, metric in enumerate(metrics):
                     label = "%s · %s · %s" % (labels[metric], entity.name, region.display_name)
@@ -774,6 +799,7 @@ class SystemWebViewApi:
         outputs: List[str] = []
         run_dir = ""
         checkpoint = ""
+        save_failed = False
         message = str(error) if error else ""
         if blocked:
             message += "；请稍后在软件内确认网页查询正常，再继续查询"
@@ -782,6 +808,11 @@ class SystemWebViewApi:
         try:
             if rows:
                 outputs, run_dir = self._export(rows, config)
+        except (OSError, ValueError) as exc:
+            incomplete = True
+            save_failed = True
+            message = (message + "；" if message else "") + "保存结果失败：%s" % exc
+        try:
             if incomplete or self._completed_tasks:
                 if self._run_directory is None:
                     output_root = pathlib.Path(config.get("outputDir") or pathlib.Path.home() / "Downloads" / "百度指数数据")
@@ -810,10 +841,11 @@ class SystemWebViewApi:
                 checkpoint = str(path)
         except (OSError, ValueError) as exc:
             incomplete = True
+            save_failed = True
             message = (message + "；" if message else "") + "保存结果失败：%s" % exc
         return {
             "cancelled": cancelled, "blocked": blocked, "incomplete": incomplete,
-            "canResume": incomplete and len(self._completed_tasks) < total,
+            "canResume": incomplete and (save_failed or len(self._completed_tasks) < total),
             "message": message, "completed": len(self._completed_tasks), "total": total,
             **self._task_counts(),
             "rows": [_row_dict(item) for item in rows[-2000:]], "rowCount": len(rows), "outputs": outputs,
@@ -825,19 +857,12 @@ class SystemWebViewApi:
         self._pause_event.clear()
         document = self._load_account_document()
         cookies = list(document["cookies"])
-        # Device identifiers can rotate independently from login credentials.
-        # Never import the native WebView's login/session cookies into a saved
-        # account: it may currently be signed in as a different user.
-        try:
-            login_window = self._ensure_login_window()
-            browser_cookie = self._cookie_header(login_window.get_cookies() or []) if login_window else ""
-        except Exception:
-            browser_cookie = ""
-        if browser_cookie:
-            cookies = [_merge_cookie_headers(account, browser_cookie) for account in cookies]
-        keywords = [str(item).strip() for item in config.get("keywords", []) if str(item).strip()]
-        region_ids = config.get("regionIds") or [0]
-        regions = [resolve_region(int(value)) for value in region_ids]
+        raw_keywords = config.get("keywords", [])
+        region_ids = config.get("regionIds", [0])
+        if not isinstance(raw_keywords, (list, tuple)) or not isinstance(region_ids, (list, tuple)):
+            raise ValueError("关键词和地区应为列表")
+        keywords = list(dict.fromkeys(str(item).strip() for item in raw_keywords if str(item).strip()))
+        regions = list({int(value): resolve_region(int(value)) for value in region_ids}.values())
         index_mode = "brand" if config.get("indexMode") == "brand" else "search"
         config = dict(config)
         config["keywords"] = keywords
@@ -845,11 +870,36 @@ class SystemWebViewApi:
         config["indexMode"] = index_mode
         config["strategy"] = document["strategy"]
         channels = config.get("brandChannels") if index_mode == "brand" else config.get("searchChannels")
+        valid_channels = {"brand_index", "brand_search", "brand_news", "brand_interaction"} if index_mode == "brand" else {"overall", "pc", "mobile", "news"}
+        if not isinstance(channels, (list, tuple)) or any(item not in valid_channels for item in channels):
+            raise ValueError("请选择有效的指数类型")
+        channel_key = "brandChannels" if index_mode == "brand" else "searchChannels"
+        config[channel_key] = list(dict.fromkeys(channels))
+        if (config.get("period") or "daily") not in PERIOD_LABELS:
+            raise ValueError("聚合周期不正确")
+        try:
+            interval = float(config.get("interval", 4))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("提取间隔应为非负数") from exc
+        if not math.isfinite(interval) or interval < 0:
+            raise ValueError("提取间隔应为非负数")
+        config["interval"] = interval
         validate_task(
             keywords, regions, config["startDate"], config["endDate"],
             has_cookie=bool(cookies), has_channel=bool(channels),
             include_news="news" in (channels or []),
         )
+        # Import only rotating device identifiers, never another account's
+        # login cookies. Invalid tasks should not create a browser window.
+        try:
+            login_window = self._ensure_login_window()
+            browser_cookie = self._cookie_header(login_window.get_cookies() or []) if login_window else ""
+        except Exception:
+            browser_cookie = ""
+        if browser_cookie:
+            cookies = [_merge_cookie_headers(account, browser_cookie) for account in cookies]
+        if self._shutting_down:
+            raise InterruptedError("窗口已关闭")
         task_key = json.dumps({key: config.get(key) for key in (
             "keywords", "regionIds", "startDate", "endDate", "period", "indexMode",
             "searchChannels", "brandChannels", "outputDir",
@@ -1128,7 +1178,7 @@ def launch_system_webview(
                       checks.noCommunityNavigation = !document.querySelector('[data-page="community"]');
                       document.getElementById('aboutButton').click();
                       checks.aboutOpen = !document.getElementById('aboutModal').classList.contains('hidden');
-                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.4');
+                      checks.aboutVersion = document.getElementById('aboutModal').innerText.includes('版本：v2.4.5');
                       checks.aboutContact = document.getElementById('aboutModal').innerText.includes('QQ群：610645081');
                       checks.aboutIcon = (() => {
                         const icon = document.querySelector('#aboutButton .aboutIcon');
@@ -1165,6 +1215,11 @@ def launch_system_webview(
                       document.getElementById('resetConfig').click();
                       checks.reset = document.getElementById('keywords').value === '华为' && document.getElementById('interval').value === '4';
                       checks.outputDirectory = Boolean(document.getElementById('outputDir').value);
+                      setRunning(true);
+                      checks.runningConfigLocked = [...document.querySelectorAll('.configPanel input, .configPanel textarea, .configPanel select, .configPanel button')].every(x => x.disabled);
+                      checks.runningPauseStopAvailable = !document.getElementById('pauseBtn').disabled && !document.getElementById('stopBtn').disabled;
+                      setRunning(false);
+                      checks.finishedConfigUnlocked = [...document.querySelectorAll('.configPanel input, .configPanel textarea, .configPanel select, .configPanel button')].every(x => !x.disabled);
                       checks.queryControls = document.getElementById('pauseBtn').disabled && document.getElementById('stopBtn').disabled;
                       showQueryResult({blocked:true, incomplete:true, cancelled:false, completed:29, total:362,
                         rows:[{keyword:'供应链',date:'2011-01-01',province:'北京',city:'北京',overall:10,pc:10,mobile:0}],

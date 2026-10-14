@@ -1,0 +1,42 @@
+name: Test Linux CLI and source package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Test source and install wheel
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -q
+          python -m pip wheel --no-deps . -w /tmp/index-wheels
+          python -m pip install --no-deps /tmp/index-wheels/*.whl
+          cd /tmp
+          baidu-index regions 广东
+          python - <<'PY'
+          import csv
+          import pathlib
+          import subprocess
+          from baidu_index_tool.webview_gui import _ui_path
+          root = _ui_path().parent
+          for name in ['index.html', 'app.js', 'style.css', 'controls.css', 'assets/econ-index-icon.png']:
+              assert (root / name).is_file(), name
+          source = pathlib.Path('daily-fixture.csv')
+          with source.open('w', encoding='utf-8-sig', newline='') as stream:
+              writer = csv.writer(stream)
+              writer.writerow(['关键词','日期','省份','城市','PC+移动端','PC端','移动端'])
+              writer.writerows([['测试','2026-10-10','全国','全国',10,0,10], ['测试','2026-10-11','全国','全国',20,0,20]])
+          subprocess.run(['baidu-index','convert',str(source),'--aggregate','monthly','--method','mean','--output','monthly-fixture.csv'], check=True)
+          with pathlib.Path('monthly-fixture.csv').open(encoding='utf-8-sig') as stream:
+              rows = list(csv.DictReader(stream))
+          assert len(rows) == 1 and float(rows[0]['PC+移动端']) == 15, rows
+          print('Linux wheel resources and CLI conversion verified')
+          PY

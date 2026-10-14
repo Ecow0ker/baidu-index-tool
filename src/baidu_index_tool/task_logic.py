@@ -61,9 +61,16 @@ def validate_task(
 def create_run_directory(root: pathlib.Path, now: Optional[dt.datetime] = None) -> Tuple[pathlib.Path, str]:
     now = now or dt.datetime.now()
     stamp = now.strftime("%Y年%m月%d日 %H时%M分%S秒")
-    path = pathlib.Path(root).expanduser().resolve() / stamp
-    path.mkdir(parents=True, exist_ok=True)
-    return path, stamp
+    parent = pathlib.Path(root).expanduser().resolve()
+    parent.mkdir(parents=True, exist_ok=True)
+    index = 1
+    while True:
+        path = parent / (stamp if index == 1 else "%s-%d" % (stamp, index))
+        try:
+            path.mkdir()
+            return path, stamp
+        except FileExistsError:
+            index += 1
 
 
 def output_filename(

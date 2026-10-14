@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import csv
 import pathlib
+import tempfile
+from contextlib import contextmanager
 from typing import Iterable, List
 
 from .models import BrandIndexPoint, IndexPoint
 from .reverse_contract import BRAND_HEADERS, NEWS_HEADERS, SEARCH_HEADERS
 
 HEADERS = SEARCH_HEADERS
+
+
+@contextmanager
+def _atomic_csv(output: pathlib.Path):
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8-sig", newline="",
+                                         dir=output.parent, prefix="." + output.name + ".",
+                                         suffix=".tmp", delete=False) as handle:
+            temporary = pathlib.Path(handle.name)
+            yield handle
+        temporary.replace(output)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
 
 
 def _format_number(value):
@@ -20,8 +38,7 @@ def _format_number(value):
 
 def write_csv(points: Iterable[IndexPoint], output: pathlib.Path) -> pathlib.Path:
     output = pathlib.Path(output).expanduser().resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8-sig", newline="") as handle:
+    with _atomic_csv(output) as handle:
         writer = csv.writer(handle)
         writer.writerow(HEADERS)
         for row in points:
@@ -34,8 +51,7 @@ def write_csv(points: Iterable[IndexPoint], output: pathlib.Path) -> pathlib.Pat
 
 def write_news_csv(points: Iterable[IndexPoint], output: pathlib.Path) -> pathlib.Path:
     output = pathlib.Path(output).expanduser().resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8-sig", newline="") as handle:
+    with _atomic_csv(output) as handle:
         writer = csv.writer(handle)
         writer.writerow(NEWS_HEADERS)
         for row in points:
@@ -45,8 +61,7 @@ def write_news_csv(points: Iterable[IndexPoint], output: pathlib.Path) -> pathli
 
 def write_brand_csv(points: Iterable[BrandIndexPoint], output: pathlib.Path) -> pathlib.Path:
     output = pathlib.Path(output).expanduser().resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8-sig", newline="") as handle:
+    with _atomic_csv(output) as handle:
         writer = csv.writer(handle)
         writer.writerow(BRAND_HEADERS)
         for row in points:

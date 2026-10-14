@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
@@ -155,7 +156,9 @@ def parse_news_payload(
     rows: List[IndexPoint] = []
     for item in indexes:
         if not isinstance(item, dict):
-            continue
+            raise ResponseFormatError("资讯指数条目格式错误")
+        if "data" not in item and "_all" not in item:
+            raise ResponseFormatError("资讯指数序列缺少 data 字段")
         if item.get("type", "day") not in (None, "day"):
             raise ResponseFormatError("资讯接口返回非日级采样（%s），请缩短查询时间范围" % item["type"])
         key = item.get("key")
@@ -167,7 +170,7 @@ def parse_news_payload(
         start = str(item.get("startDate") or "")
         if series and not start:
             raise ResponseFormatError("资讯指数序列缺少 startDate")
-        for date, value in zip(_dates(start, len(series)), series):
+        for date, value in zip(_dates(start, len(series)) if series else [], series):
             rows.append(IndexPoint(keyword, date, province, city, None, None, None, value))
     return rows
 
@@ -416,7 +419,7 @@ class BaiduIndexClient:
         area: Any = "全国",
         progress: Optional[Callable[[int, int, str], None]] = None,
     ) -> List[IndexPoint]:
-        cleaned = [x.strip() for x in keywords if x and x.strip()]
+        cleaned = list(dict.fromkeys(x.strip() for x in keywords if x and x.strip()))
         if not cleaned:
             raise ValueError("关键词列表为空")
         rows: List[IndexPoint] = []
@@ -424,7 +427,13 @@ class BaiduIndexClient:
         for index, keyword in enumerate(cleaned, 1):
             if progress:
                 progress(index - 1, total, keyword)
-            rows.extend(self.query_keyword(keyword, start_date, end_date, area))
+            try:
+                rows.extend(self.query_keyword(keyword, start_date, end_date, area))
+            except NoDataError as exc:
+                rows.extend(getattr(exc, "partial_rows", []))
+            except Exception as exc:
+                exc.partial_rows = rows + getattr(exc, "partial_rows", [])
+                raise
             if progress:
                 progress(index, total, keyword)
         return rows
@@ -489,8 +498,28 @@ class BaiduIndexClient:
         rows: List[BrandIndexPoint] = []
         for item in values:
             if not isinstance(item, dict) or not item.get("statDate"):
-                continue
+                raise ResponseFormatError("品牌指数条目缺少有效日期")
+            date = str(item["statDate"])
+            try:
+                parse_date(date)
+            except ValueError as exc:
+                raise ResponseFormatError("品牌指数日期格式异常") from exc
             value = item.get("value")
+            if value == "":
+                value = None
+            if value is not None:
+                if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                    raise ResponseFormatError("品牌指数值格式异常")
+                if isinstance(value, str):
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        try:
+                            value = float(value)
+                        except ValueError as exc:
+                            raise ResponseFormatError("品牌指数值格式异常") from exc
+                if isinstance(value, float) and not math.isfinite(value):
+                    raise ResponseFormatError("品牌指数值不是有限数值")
             values_by_metric = {
                 "brand_index": None,
                 "brand_search": None,
@@ -499,10 +528,10 @@ class BaiduIndexClient:
             }
             values_by_metric[metric] = value
             rows.append(BrandIndexPoint(
-                entity.name, str(item["statDate"]), province, city,
+                entity.name, date, province, city,
                 values_by_metric["brand_index"], values_by_metric["brand_search"],
                 values_by_metric["brand_news"], values_by_metric["brand_interaction"],
             ))
-        if not rows:
+        if not rows or not any(getattr(row, metric) is not None for row in rows):
             raise NoDataError("该条件没有品牌指数数据")
         return rows

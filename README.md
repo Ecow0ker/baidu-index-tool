@@ -1,6 +1,6 @@
 # 百度指数查询工具
 
-当前版本：`v2.4.4`
+当前版本：`v2.4.5`
 
 Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结果可在软件内查看，并导出为 Excel 可直接打开的 CSV 文件。
 
@@ -27,10 +27,10 @@ Windows 和 macOS 提供图形界面，Linux 提供命令行工具。查询结�
 
 | 系统 | 处理器 | 文件 |
 |---|---|---|
-| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.4-windows-x64.exe` |
-| macOS | Intel | `baidu-index-tool-v2.4.4-macos-x64.zip` |
-| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.4-macos-arm64.zip` |
-| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.4-source.zip` |
+| Windows | 64 位 Intel/AMD | `baidu-index-tool-v2.4.5-windows-x64.exe` |
+| macOS | Intel | `baidu-index-tool-v2.4.5-macos-x64.zip` |
+| macOS | Apple Silicon（M 系列） | `baidu-index-tool-v2.4.5-macos-arm64.zip` |
+| Windows、macOS、Linux | Python 源码 | `baidu-index-tool-v2.4.5-source.zip` |
 
 Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指数查询工具.app”。
 
@@ -38,7 +38,9 @@ Windows 下载 EXE 后可直接运行。macOS 解压 ZIP 后运行“百度指�
 
 请求间隔覆盖趋势接口、解码参数接口及重试。跨多年的查询包含多个时间段，实际请求数会多于地区数量，预计耗时随日期范围增加。
 
-表格显示最近 2,000 条记录，CSV 文件保存全部结果。
+表格显示最近 2,000 条原始日级记录；CSV 保存全部结果，并按所选周期计算日均值。缺失日期不作为 0 参与均值计算。
+
+导出写入失败时仍尝试保存查询进度；当前窗口点击“继续查询”可重试导出，已完成的查询不重复请求。关闭主窗口会停止后续请求。
 
 macOS 首次启动若提示来源限制，可右键 APP 选择“打开”；也可执行：
 

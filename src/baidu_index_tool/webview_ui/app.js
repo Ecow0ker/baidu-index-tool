@@ -58,7 +58,7 @@ function addLog(title,detail='',kind='info'){
   $('activityLog').prepend(item);while($('activityLog').children.length>80)$('activityLog').lastElementChild.remove();
 }
 function updateStatus(title,detail){$('statusTitle').textContent=title;$('status').textContent=detail||title}
-function setRunning(value){running=value;$('startBtn').disabled=value;$('stopBtn').disabled=!value;$('pauseBtn').disabled=!value;if(!value){paused=false;$('pauseBtn').textContent='Ⅱ 暂停'}}
+function setRunning(value){running=value;document.querySelectorAll('.configPanel input, .configPanel textarea, .configPanel select, .configPanel button').forEach(control=>control.disabled=value);$('startBtn').disabled=value;$('stopBtn').disabled=!value;$('pauseBtn').disabled=!value;if(!value){paused=false;$('pauseBtn').textContent='Ⅱ 暂停'}}
 function setAccounts(value){
   $('accounts').value=value.text||'';$('strategy').value=value.strategy||$('strategy').value;
   $('accountCount').textContent=`已保存 ${value.count||0} 个账号`;
@@ -90,7 +90,7 @@ async function syncCookies(){
 }
 async function startQuery(){
   const config=queryConfig(),key=queryKey(config);config.resume=Boolean(resumeKey&&resumeKey===key);
-  if(!config.resume){resumeKey='';$('tableBody').innerHTML='';completedRows=0;$('rowCount').textContent='共 0 条';$('bar').style.width='0';$('percent').textContent='0%';$('successTotal').textContent='0';$('noDataTotal').textContent='0'}
+  if(!config.resume){resumeKey='';lastRunDir='';$('tableBody').innerHTML='';completedRows=0;$('rowCount').textContent='共 0 条';$('bar').style.width='0';$('percent').textContent='0%';$('successTotal').textContent='0';$('noDataTotal').textContent='0'}
   setRunning(true);$('openExport').disabled=true;$('failureTotal').textContent='0';$('countdownValue').textContent='—';updateStatus(config.resume?'正在继续任务':'正在创建任务','校验关键词、地区、日期与账号状态');addLog(config.resume?'继续未完成的任务':'任务已创建',`${config.keywords.length} 个关键词 · ${config.regionIds.length} 个地区`);
   try{
     const result=await api().query(config);
@@ -131,7 +131,7 @@ $('accounts').oninput=()=>{$('accountCount').textContent=`状态：${$('accounts
 $('startBtn').onclick=startQuery;$('stopBtn').onclick=async()=>{await api().cancel();updateStatus('正在停止','等待当前请求结束')};
 $('pauseBtn').onclick=async()=>{const value=await api().toggle_pause();paused=Boolean(value.paused);$('pauseBtn').textContent=paused?'▶ 继续':'Ⅱ 暂停';updateStatus(paused?'任务已暂停':'任务已继续',paused?'倒计时和后续请求已暂停':'继续执行查询任务');addLog(paused?'任务已暂停':'任务已继续','','warn')};
 $('openExport').onclick=()=>lastRunDir&&api().open_path(lastRunDir);
-$('chooseOutput').onclick=async()=>{$('chooseOutput').disabled=true;try{const value=await api().choose_output_directory($('outputDir').value);if(value.selected){$('outputDir').value=value.path;updateStatus('导出目录已更新',value.path);addLog('导出目录已更新',value.path)}}catch(error){updateStatus('选择目录失败',String(error))}finally{$('chooseOutput').disabled=false}};
+$('chooseOutput').onclick=async()=>{$('chooseOutput').disabled=true;try{const value=await api().choose_output_directory($('outputDir').value);if(value.selected){$('outputDir').value=value.path;updateStatus('导出目录已更新',value.path);addLog('导出目录已更新',value.path)}}catch(error){updateStatus('选择目录失败',String(error))}finally{$('chooseOutput').disabled=running}};
 $('clearLog').onclick=()=>{$('activityLog').innerHTML='';addLog('日志已清空')};
 $('collapseLog').onclick=()=>{document.body.classList.toggle('logCollapsed');$('collapseLog').textContent=document.body.classList.contains('logCollapsed')?'展开':'收起'};
 document.querySelectorAll('.navItem').forEach(button=>button.onclick=()=>{document.querySelectorAll('.navItem').forEach(x=>x.classList.remove('active'));button.classList.add('active');const page=button.dataset.page;if(page==='account')openAccounts();if(page==='export'){if(lastRunDir)api().open_path(lastRunDir);else addLog('暂无导出记录','完成一次查询后可打开导出目录','warn')}if(page!=='task')setTimeout(()=>{button.classList.remove('active');document.querySelector('[data-page="task"]').classList.add('active')},350)});

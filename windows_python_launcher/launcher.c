@@ -87,7 +87,7 @@ static int ensure_runtime(wchar_t *root, size_t root_count) {
     if (!size || size >= sizeof(local) / sizeof(local[0])) {
         if (FAILED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, local))) return 0;
     }
-    _snwprintf(root, root_count, L"%ls\\CrossPlatformTools\\BaiduIndexTool\\2.4.4\\%ls", local, EDITION_NAME);
+    _snwprintf(root, root_count, L"%ls\\CrossPlatformTools\\BaiduIndexTool\\2.4.5\\%ls", local, EDITION_NAME);
     SHCreateDirectoryExW(NULL, root, NULL);
 
     wchar_t marker[MAX_PATH * 4], python[MAX_PATH * 4];

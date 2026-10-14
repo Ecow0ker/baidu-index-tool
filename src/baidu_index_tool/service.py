@@ -6,6 +6,7 @@ from typing import Callable, List, Optional, Sequence
 
 from .aggregate import aggregate_points
 from .api import BaiduIndexClient
+from .models import Region
 from .export import read_csv, write_csv
 from .models import IndexPoint
 
@@ -51,9 +52,16 @@ def query_and_export(
     timeout: float = 20.0,
     retries: int = 2,
     ca_file: Optional[str] = None,
+    on_no_data: Optional[Callable[[str, str, Region, str, str], None]] = None,
 ) -> pathlib.Path:
-    client = BaiduIndexClient(cookie, timeout=timeout, retries=retries, ca_file=ca_file)
-    rows = client.query_keywords(keywords, start_date, end_date, area, progress)
+    client = BaiduIndexClient(cookie, timeout=timeout, retries=retries, ca_file=ca_file, on_no_data=on_no_data)
+    try:
+        rows = client.query_keywords(keywords, start_date, end_date, area, progress)
+    except Exception as exc:
+        partial = getattr(exc, "partial_rows", [])
+        if partial:
+            exc.partial_output = str(write_csv(aggregate_points(partial, period, method), output))
+        raise
     return write_csv(aggregate_points(rows, period, method), output)
 
 

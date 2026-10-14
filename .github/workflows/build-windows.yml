@@ -26,6 +26,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Regression tests failed" }
       - uses: actions/upload-artifact@v7
         with:
-          name: baidu-index-tool-v2.4.4-windows-x64
-          path: dist/baidu-index-tool-v2.4.4-windows-x64.exe
+          name: baidu-index-tool-v2.4.5-windows-x64
+          path: dist/baidu-index-tool-v2.4.5-windows-x64.exe
           if-no-files-found: error

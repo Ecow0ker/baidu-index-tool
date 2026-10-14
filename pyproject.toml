@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "baidu-index-cross-platform"
-version = "2.4.4"
+version = "2.4.5"
 description = "支持 Windows、macOS 图形界面和 Linux 命令行的百度指数查询工具"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,3 +23,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+baidu_index_tool = ["webview_ui/*.html", "webview_ui/*.css", "webview_ui/*.js", "webview_ui/assets/*.png"]

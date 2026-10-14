@@ -93,9 +93,12 @@ def _query(args: argparse.Namespace) -> int:
     def progress(done: int, total: int, keyword: str) -> None:
         print("[%d/%d] %s" % (done, total, keyword), file=sys.stderr, flush=True)
 
+    def no_data(metric, keyword, region, start, end):
+        print("无数据: %s · %s · %s 至 %s" % (keyword, region.display_name, start, end), file=sys.stderr, flush=True)
+
     result = query_and_export(
         cookie, words, args.start, args.end, args.area, output,
-        args.aggregate, args.method, progress, args.timeout, args.retries, args.ca_file,
+        args.aggregate, args.method, progress, args.timeout, args.retries, args.ca_file, no_data,
     )
     print(str(result))
     return 0
@@ -121,6 +124,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not args.command:
         parser.print_help()
         return 0
+    def report_partial(exc):
+        path = getattr(exc, "partial_output", "")
+        if path:
+            print("已保留结果: %s" % path, file=sys.stderr)
     try:
         if args.command == "query": return _query(args)
         if args.command == "convert": return _convert(args)
@@ -131,12 +138,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error("未知命令")
         return 2
     except AuthenticationError as exc:
+        report_partial(exc)
         print("登录错误: %s" % exc, file=sys.stderr); return 3
     except RateLimitError as exc:
+        report_partial(exc)
         print("频率限制: %s" % exc, file=sys.stderr); return 4
     except (ApiError, NetworkError) as exc:
+        report_partial(exc)
         print("查询错误: %s" % exc, file=sys.stderr); return 5
     except (ValueError, OSError) as exc:
+        report_partial(exc)
         print("参数/文件错误: %s" % exc, file=sys.stderr); return 2
 
 
