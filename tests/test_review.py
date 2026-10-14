@@ -155,7 +155,7 @@ class ReviewTests(unittest.TestCase):
             self.assertEqual(status, 5)
             self.assertTrue(target.exists())
             with target.open(encoding="utf-8-sig") as stream: self.assertEqual(len(list(csv.DictReader(stream))), 1)
-            self.assertIn(str(target), stderr.getvalue())
+            self.assertIn(str(target.resolve()), stderr.getvalue())
             self.assertNotIn("BDUSS", stderr.getvalue())
 
     def test_cancel_while_paused_stops_wait_without_request(self):
