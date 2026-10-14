@@ -22,6 +22,17 @@ from test_no_data import api_for, config, point
 
 
 class ReviewTests(unittest.TestCase):
+    def test_city_selection_includes_municipalities_without_changing_area_types(self):
+        from baidu_index_tool.regions import all_regions, is_city_region
+        regions = all_regions()
+        selected = [r for r in regions if is_city_region(r)]
+        self.assertEqual(len(selected), 362)
+        self.assertEqual(len({r.area_id for r in selected}), 362)
+        municipalities = [r for r in selected if r.kind == "province"]
+        self.assertEqual({r.name for r in municipalities}, {"北京", "上海", "天津", "重庆"})
+        payload = api_for(None).bootstrap()["regions"]
+        self.assertEqual({r["area_id"] for r in payload if r["selectAsCity"]}, {r.area_id for r in selected})
+
     def test_cleared_regions_do_not_query_national_data(self):
         calls = []
         class Client:

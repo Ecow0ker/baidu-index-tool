@@ -21,7 +21,7 @@ from .aggregate import aggregate_brand_points, aggregate_points
 from .api import AuthenticationError, BaiduIndexClient, NoDataError, RateLimitError, RequestBlockedError
 from .export import write_brand_csv, write_csv, write_news_csv
 from .models import BrandIndexPoint, IndexPoint, Region
-from .regions import all_regions, resolve_region
+from .regions import all_regions, is_city_region, resolve_region
 from .task_logic import create_run_directory, output_filename, validate_task
 from .reverse_contract import PERIOD_LABELS
 
@@ -226,7 +226,7 @@ class SystemWebViewApi:
 
     def bootstrap(self) -> Dict[str, Any]:
         accounts = self._load_account_document()
-        regions = [dict(dataclasses.asdict(item), display_name=item.display_name) for item in all_regions()]
+        regions = [dict(dataclasses.asdict(item), display_name=item.display_name, selectAsCity=is_city_region(item)) for item in all_regions()]
         return {
             "version": APP_VERSION,
             "accounts": "\n".join(accounts["cookies"]),
@@ -1208,8 +1208,9 @@ def launch_system_webview(
                       document.getElementById('selectCities').click();
                       checks.selectAllCities = [...document.querySelectorAll('.regionCheck')].every(box => {
                         const region = regions.find(x => Number(x.area_id) === Number(box.value));
-                        return box.checked === Boolean(region && region.kind === 'city');
+                        return box.checked === Boolean(region && region.selectAsCity);
                       });
+                      checks.citySelectionIncludesMunicipalities = [911,910,923,904].every(id => document.querySelector(`.regionCheck[value="${id}"]`).checked);
                       document.getElementById('clearRegions').click();
                       checks.clearRegions = !document.querySelector('.regionCheck:checked');
                       document.getElementById('resetConfig').click();

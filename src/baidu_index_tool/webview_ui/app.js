@@ -114,7 +114,7 @@ $('keywords').oninput=updateCounts;$('interval').oninput=updateSummary;$('search
 document.querySelectorAll('.checks input').forEach(x=>x.onchange=updateSummary);
 $('regionSearch').oninput=event=>{const needle=event.target.value.trim().toLowerCase();document.querySelectorAll('.regionRow').forEach(row=>row.classList.toggle('hiddenRegion',Boolean(needle)&&!row.dataset.search.includes(needle)))};
 $('selectProvinces').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(box=>{const r=regions.find(x=>Number(x.area_id)===Number(box.value));box.checked=Boolean(r&&r.kind==='province')});updateCounts()};
-$('selectCities').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(box=>{const r=regions.find(x=>Number(x.area_id)===Number(box.value));box.checked=Boolean(r&&r.kind==='city')});updateCounts()};
+$('selectCities').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(box=>{const r=regions.find(x=>Number(x.area_id)===Number(box.value));box.checked=Boolean(r&&r.selectAsCity)});updateCounts()};
 $('clearRegions').onclick=()=>{document.querySelectorAll('.regionCheck').forEach(x=>x.checked=false);updateCounts()};
 $('resetConfig').onclick=()=>{resumeKey='';$('keywords').value='华为';$('interval').value='4';switchMode('search');document.querySelectorAll('.regionCheck').forEach((x,i)=>x.checked=i===0);updateCounts();addLog('已恢复默认配置')};
 function openAccounts(){$('accountModal').classList.remove('hidden')}

@@ -12,6 +12,13 @@ def all_regions() -> List[Region]:
     return list(REGIONS)
 
 
+def is_city_region(region: Region) -> bool:
+    # Municipalities have province-level API IDs, but belong in city selection.
+    return region.kind == "city" or (
+        region.kind == "province" and region.name in ("北京", "上海", "天津", "重庆")
+    )
+
+
 def find_regions(text: str) -> List[Region]:
     needle = (text or "").strip().lower()
     if not needle:
